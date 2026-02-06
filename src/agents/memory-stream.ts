@@ -1,7 +1,5 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { chatCompletion } from "./llm";
 import { Memory, AgentState } from "./types";
-
-const anthropic = new Anthropic();
 
 // Simple embedding using Claude — returns a normalized vector
 // For MVP, we use a hash-based pseudo-embedding for speed,
@@ -29,17 +27,11 @@ export function cosineSimilarity(a: number[], b: number[]): number {
 }
 
 export async function scoreImportance(description: string): Promise<number> {
-  const response = await anthropic.messages.create({
-    model: "claude-sonnet-4-5-20250929",
-    max_tokens: 10,
-    messages: [
-      {
-        role: "user",
-        content: `On a scale of 1 to 10, where 1 is entirely mundane (e.g., brushing teeth, walking) and 10 is extremely poignant or life-changing (e.g., a breakup, major achievement), rate the importance of the following memory. Respond with ONLY a number.\n\nMemory: "${description}"`,
-      },
-    ],
-  });
-  const text = response.content[0].type === "text" ? response.content[0].text.trim() : "5";
+  const text = await chatCompletion(
+    undefined,
+    `On a scale of 1 to 10, where 1 is entirely mundane (e.g., brushing teeth, walking) and 10 is extremely poignant or life-changing (e.g., a breakup, major achievement), rate the importance of the following memory. Respond with ONLY a number.\n\nMemory: "${description}"`,
+    10,
+  );
   const score = parseInt(text, 10);
   return isNaN(score) ? 5 : Math.max(1, Math.min(10, score));
 }

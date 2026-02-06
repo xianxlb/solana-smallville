@@ -1,8 +1,6 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { chatCompletion } from "./llm";
 import { AgentState, Memory } from "./types";
 import { retrieveMemories, createMemory, scoreImportance } from "./memory-stream";
-
-const anthropic = new Anthropic();
 
 export async function generateReflections(
   agent: AgentState,
@@ -20,24 +18,12 @@ export async function generateReflections(
     .map((m) => `- ${m.description}`)
     .join("\n");
 
-  const questionsResponse = await anthropic.messages.create({
-    model: "claude-sonnet-4-5-20250929",
-    max_tokens: 300,
-    messages: [
-      {
-        role: "user",
-        content: `You are ${agent.name}. ${agent.description}
+  const questionsText = await chatCompletion(
+    `You are ${agent.name}. ${agent.description}`,
+    `Given your recent experiences:\n${memoryContext}\n\nWhat are the 3 most salient high-level questions you can answer about your recent experiences? Respond with just the 3 questions, one per line.`,
+    300,
+  );
 
-Given your recent experiences:
-${memoryContext}
-
-What are the 3 most salient high-level questions you can answer about your recent experiences? Respond with just the 3 questions, one per line.`,
-      },
-    ],
-  });
-
-  const questionsText =
-    questionsResponse.content[0].type === "text" ? questionsResponse.content[0].text : "";
   const questions = questionsText
     .split("\n")
     .map((q) => q.replace(/^\d+[\.\)]\s*/, "").trim())
@@ -51,24 +37,14 @@ What are the 3 most salient high-level questions you can answer about your recen
     const relevantMemories = retrieveMemories(agent, question, currentTime, 10);
     const context = relevantMemories.map((m) => `- ${m.description}`).join("\n");
 
-    const insightResponse = await anthropic.messages.create({
-      model: "claude-sonnet-4-5-20250929",
-      max_tokens: 200,
-      messages: [
-        {
-          role: "user",
-          content: `You are ${agent.name}. Based on these memories:\n${context}\n\nAnswer this question with a concise insight (1-2 sentences): ${question}`,
-        },
-      ],
-    });
+    const insight = await chatCompletion(
+      `You are ${agent.name}. ${agent.description}`,
+      `Based on these memories:\n${context}\n\nAnswer this question with a concise insight (1-2 sentences): ${question}`,
+      200,
+    );
 
-    const insight =
-      insightResponse.content[0].type === "text"
-        ? insightResponse.content[0].text.trim()
-        : "I need more time to think about this.";
-
-    const importance = await scoreImportance(insight);
-    reflections.push(createMemory(agent.id, insight, "reflection", currentTime, importance));
+    const importance = await scoreImportance(insight || "I need more time to think about this.");
+    reflections.push(createMemory(agent.id, insight || "I need more time to think about this.", "reflection", currentTime, importance));
   }
 
   return reflections;

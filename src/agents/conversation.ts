@@ -1,8 +1,6 @@
-import Anthropic from "@anthropic-ai/sdk";
-import { AgentState, Conversation, ConversationMessage, Memory } from "./types";
+import { chatCompletion } from "./llm";
+import { AgentState, Conversation, Memory } from "./types";
 import { retrieveMemories, createMemory, scoreImportance } from "./memory-stream";
-
-const anthropic = new Anthropic();
 
 let convoCounter = 0;
 
@@ -43,7 +41,6 @@ export async function generateReply(
   const otherAgent = allAgents.get(otherParticipantId);
   const otherName = otherAgent?.name || "someone";
 
-  // Retrieve relevant memories
   const topicHints = conversation.messages
     .slice(-3)
     .map((m) => m.content)
@@ -58,15 +55,9 @@ export async function generateReply(
     .map((m) => `${m.agentName}: ${m.content}`)
     .join("\n");
 
-  const response = await anthropic.messages.create({
-    model: "claude-sonnet-4-5-20250929",
-    max_tokens: 200,
-    messages: [
-      {
-        role: "user",
-        content: `You are ${respondent.name}. ${respondent.description}
-
-You are having a conversation with ${otherName} at ${conversation.location}.
+  const reply = await chatCompletion(
+    `You are ${respondent.name}. ${respondent.description}`,
+    `You are having a conversation with ${otherName} at ${conversation.location}.
 
 Your relevant memories:
 ${memoryContext}
@@ -75,24 +66,18 @@ Conversation so far:
 ${convoHistory}
 
 Respond in character as ${respondent.name}. Keep your response to 1-3 sentences. Be natural and stay true to your personality.`,
-      },
-    ],
-  });
+    200,
+  );
 
-  return response.content[0].type === "text"
-    ? response.content[0].text.trim()
-    : "...";
+  return reply || "...";
 }
 
 export async function shouldEndConversation(
-  agent: AgentState,
+  _agent: AgentState,
   conversation: Conversation,
 ): Promise<boolean> {
-  // End after 5-8 exchanges or if conversation has been going on too long
   if (conversation.messages.length >= 8) return true;
   if (conversation.messages.length < 4) return false;
-
-  // 30% chance to end each turn after 4 messages
   return Math.random() < 0.3;
 }
 
@@ -117,9 +102,6 @@ export async function conversationToMemories(
   currentTime: number,
 ): Promise<Memory[]> {
   const memories: Memory[] = [];
-  const summary = conversation.messages
-    .map((m) => `${m.agentName}: ${m.content}`)
-    .join("\n");
 
   for (const participantId of conversation.participants) {
     const agent = allAgents.get(participantId);

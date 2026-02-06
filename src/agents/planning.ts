@@ -1,8 +1,6 @@
-import Anthropic from "@anthropic-ai/sdk";
-import { AgentState, DailyPlan, Plan, Memory } from "./types";
+import { chatCompletion } from "./llm";
+import { AgentState, DailyPlan, Plan } from "./types";
 import { retrieveMemories } from "./memory-stream";
-
-const anthropic = new Anthropic();
 
 export async function generateDailyPlan(
   agent: AgentState,
@@ -21,15 +19,9 @@ export async function generateDailyPlan(
     .map((m) => `- [${m.type}] ${m.description}`)
     .join("\n");
 
-  const response = await anthropic.messages.create({
-    model: "claude-sonnet-4-5-20250929",
-    max_tokens: 1000,
-    messages: [
-      {
-        role: "user",
-        content: `You are ${agent.name}. ${agent.description}
-
-Today is Day ${dayNumber} in Solana Smallville. Available locations: ${locationNames.join(", ")}.
+  const text = await chatCompletion(
+    `You are ${agent.name}. ${agent.description}`,
+    `Today is Day ${dayNumber} in Solana Smallville. Available locations: ${locationNames.join(", ")}.
 
 Your recent memories:
 ${memoryContext}
@@ -50,11 +42,8 @@ Respond in JSON format:
     ...
   ]
 }`,
-      },
-    ],
-  });
-
-  const text = response.content[0].type === "text" ? response.content[0].text : "{}";
+    1000,
+  );
   const jsonMatch = text.match(/\{[\s\S]*\}/);
   const parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : { overview: "Explore the town", activities: [] };
 

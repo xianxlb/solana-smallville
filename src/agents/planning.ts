@@ -1,0 +1,107 @@
+import Anthropic from "@anthropic-ai/sdk";
+import { AgentState, DailyPlan, Plan, Memory } from "./types";
+import { retrieveMemories } from "./memory-stream";
+
+const anthropic = new Anthropic();
+
+export async function generateDailyPlan(
+  agent: AgentState,
+  currentTime: number,
+  dayNumber: number,
+  locationNames: string[],
+): Promise<DailyPlan> {
+  const recentMemories = retrieveMemories(
+    agent,
+    "What have I been doing recently? What are my goals?",
+    currentTime,
+    15,
+  );
+
+  const memoryContext = recentMemories
+    .map((m) => `- [${m.type}] ${m.description}`)
+    .join("\n");
+
+  const response = await anthropic.messages.create({
+    model: "claude-sonnet-4-5-20250929",
+    max_tokens: 1000,
+    messages: [
+      {
+        role: "user",
+        content: `You are ${agent.name}. ${agent.description}
+
+Today is Day ${dayNumber} in Solana Smallville. Available locations: ${locationNames.join(", ")}.
+
+Your recent memories:
+${memoryContext}
+
+Generate a daily plan with 6-8 activities for today. Each activity should include:
+- A brief description
+- Start time (as minute of day, 0-1440, starting from 480 = 8am)
+- Duration in minutes (15-120)
+- Location name (must be from the available locations list)
+
+Also provide a 1-sentence overview of your day.
+
+Respond in JSON format:
+{
+  "overview": "...",
+  "activities": [
+    {"description": "...", "startTime": 480, "duration": 60, "location": "..."},
+    ...
+  ]
+}`,
+      },
+    ],
+  });
+
+  const text = response.content[0].type === "text" ? response.content[0].text : "{}";
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  const parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : { overview: "Explore the town", activities: [] };
+
+  const hourlyBlocks: Plan[] = (parsed.activities || []).map((a: Record<string, unknown>) => ({
+    description: a.description as string,
+    startTime: a.startTime as number,
+    duration: a.duration as number,
+    location: a.location as string,
+    status: "pending" as const,
+  }));
+
+  return {
+    date: dayNumber,
+    overview: parsed.overview || "A day in Solana Smallville",
+    hourlyBlocks,
+    currentAction: hourlyBlocks[0] || null,
+  };
+}
+
+export function getCurrentAction(plan: DailyPlan, minuteOfDay: number): Plan | null {
+  for (const block of plan.hourlyBlocks) {
+    if (
+      block.status !== "completed" &&
+      minuteOfDay >= block.startTime &&
+      minuteOfDay < block.startTime + block.duration
+    ) {
+      return block;
+    }
+  }
+  // Find next pending action
+  for (const block of plan.hourlyBlocks) {
+    if (block.status === "pending" && block.startTime > minuteOfDay) {
+      return block;
+    }
+  }
+  return null;
+}
+
+export function advancePlan(plan: DailyPlan, minuteOfDay: number): void {
+  for (const block of plan.hourlyBlocks) {
+    if (block.status === "active" && minuteOfDay >= block.startTime + block.duration) {
+      block.status = "completed";
+    }
+  }
+  const next = getCurrentAction(plan, minuteOfDay);
+  if (next && next.status === "pending" && minuteOfDay >= next.startTime) {
+    next.status = "active";
+    plan.currentAction = next;
+  }
+}

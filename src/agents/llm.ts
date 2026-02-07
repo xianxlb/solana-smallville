@@ -46,7 +46,7 @@ export async function chatCompletion(
   systemPrompt: string | undefined,
   userMessage: string,
   maxTokens: number = 500,
-  model: string = "claude-sonnet-4-5-20250929",
+  model: string = "claude-haiku-4-5-20251001",
 ): Promise<string> {
   return rateLimitedCall(async () => {
     const response = await getClient().messages.create({

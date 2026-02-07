@@ -45,7 +45,13 @@ Respond in JSON format:
     1000,
   );
   const jsonMatch = text.match(/\{[\s\S]*\}/);
-  const parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : { overview: "Explore the town", activities: [] };
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : { overview: "Explore the town", activities: [] };
+  } catch {
+    console.warn(`[${agent.name}] Failed to parse plan JSON, using fallback`);
+    parsed = { overview: "Explore the town", activities: [] };
+  }
 
   const hourlyBlocks: Plan[] = (parsed.activities || []).map((a: Record<string, unknown>) => ({
     description: a.description as string,

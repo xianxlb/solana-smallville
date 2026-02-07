@@ -1,4 +1,5 @@
-import "dotenv/config";
+import dotenv from "dotenv";
+dotenv.config({ path: ".env.local" });
 import express from "express";
 import { WebSocketServer, WebSocket } from "ws";
 import http from "http";
@@ -90,5 +91,6 @@ wss.on("connection", (ws) => {
 server.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
   console.log(`WebSocket at ws://localhost:${PORT}/ws`);
-  simulation.start(2000); // tick every 2 seconds
+  const tickMs = parseInt(process.env.TICK_INTERVAL_MS || "2000");
+  simulation.start(tickMs);
 });

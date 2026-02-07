@@ -11,6 +11,10 @@ import { generateReflections } from "@/agents/reflection";
 
 export type EventListener = (event: SimulationEvent) => void;
 
+// These are read lazily (inside methods/constructor) so dotenv has time to load
+function getMaxAgents() { return parseInt(process.env.MAX_AGENTS || "8"); }
+function getEnableReflections() { return process.env.ENABLE_REFLECTIONS !== "false"; }
+
 export class Simulation {
   world: WorldState;
   private listeners: EventListener[] = [];
@@ -30,7 +34,10 @@ export class Simulation {
   }
 
   private initAgents() {
-    for (const seed of PERSONALITIES) {
+    const maxAgents = getMaxAgents();
+    const seeds = PERSONALITIES.slice(0, maxAgents);
+    console.log(`Initializing ${seeds.length} agents (MAX_AGENTS=${maxAgents})`);
+    for (const seed of seeds) {
       const startLoc = WORLD_LOCATIONS[Math.floor(Math.random() * WORLD_LOCATIONS.length)];
       const pos = randomPositionInLocation(startLoc);
 
@@ -156,7 +163,8 @@ export class Simulation {
       }
     }
 
-    // 7. Check reflection trigger
+    // 7. Check reflection trigger (can be disabled to save LLM credits)
+    if (!getEnableReflections()) return;
     const lastReflection = this.lastReflectionTime.get(agent.id) || 0;
     if (shouldReflect(agent, lastReflection)) {
       agent.status = "reflecting";

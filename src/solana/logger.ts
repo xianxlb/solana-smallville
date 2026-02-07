@@ -1,15 +1,39 @@
-import { Connection, Keypair, Transaction, SystemProgram, PublicKey, sendAndConfirmTransaction } from "@solana/web3.js";
+import { Connection, Keypair, Transaction, TransactionInstruction, PublicKey, sendAndConfirmTransaction } from "@solana/web3.js";
 import crypto from "crypto";
 
-const DEVNET_URL = "https://api.devnet.solana.com";
+const MEMO_PROGRAM_ID = new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
 
 let connection: Connection | null = null;
 let payer: Keypair | null = null;
+let enabled = false;
 
-export function initSolanaLogger(payerKeypair?: Keypair) {
-  connection = new Connection(DEVNET_URL, "confirmed");
-  payer = payerKeypair || Keypair.generate();
-  console.log(`Solana logger initialized. Payer: ${payer.publicKey.toBase58()}`);
+// Queue for offline logging when Solana is unavailable
+const offlineLog: Array<{ hash: string; type: string; timestamp: number }> = [];
+
+export function initSolanaLogger(payerSecret?: string) {
+  const rpcUrl = process.env.SOLANA_RPC_URL || "https://api.devnet.solana.com";
+  connection = new Connection(rpcUrl, "confirmed");
+
+  if (payerSecret) {
+    try {
+      const secretKey = Uint8Array.from(JSON.parse(payerSecret));
+      payer = Keypair.fromSecretKey(secretKey);
+      enabled = true;
+      console.log(`Solana logger initialized. Payer: ${payer.publicKey.toBase58()}`);
+    } catch {
+      console.warn("Invalid SOLANA_PRIVATE_KEY, on-chain logging disabled");
+    }
+  } else {
+    console.log("No SOLANA_PRIVATE_KEY set, on-chain logging disabled (events logged locally)");
+  }
+}
+
+export function isLoggerEnabled(): boolean {
+  return enabled;
+}
+
+export function getOfflineLog() {
+  return offlineLog;
 }
 
 export function hashEvent(data: Record<string, unknown>): string {
@@ -17,30 +41,34 @@ export function hashEvent(data: Record<string, unknown>): string {
   return crypto.createHash("sha256").update(json).digest("hex");
 }
 
-// Log an encounter hash on-chain using a memo-style transaction
-// Uses the memo field in a minimal SOL transfer to self
-export async function logOnChain(eventHash: string, metadata?: string): Promise<string | null> {
-  if (!connection || !payer) {
-    console.warn("Solana logger not initialized, skipping on-chain log");
+// Log event hash on-chain using SPL Memo program
+export async function logOnChain(eventHash: string, memo: string): Promise<string | null> {
+  // Always store locally
+  offlineLog.push({ hash: eventHash, type: memo.split("|")[0], timestamp: Date.now() });
+
+  if (!connection || !payer || !enabled) {
     return null;
   }
 
   try {
+    const memoData = `smallville|${memo}|${eventHash.slice(0, 16)}`;
     const transaction = new Transaction().add(
-      SystemProgram.transfer({
-        fromPubkey: payer.publicKey,
-        toPubkey: payer.publicKey,
-        lamports: 0,
+      new TransactionInstruction({
+        keys: [{ pubkey: payer.publicKey, isSigner: true, isWritable: true }],
+        programId: MEMO_PROGRAM_ID,
+        data: Buffer.from(memoData),
       }),
     );
 
-    // Add memo data as a simple instruction
-    // In production, use the SPL Memo program
     const signature = await sendAndConfirmTransaction(connection, transaction, [payer]);
-    console.log(`Logged on-chain: ${eventHash.slice(0, 16)}... tx: ${signature}`);
+    console.log(`On-chain: ${memo} tx:${signature.slice(0, 16)}...`);
     return signature;
   } catch (err) {
-    console.error("Failed to log on-chain:", err);
+    const msg = err instanceof Error ? err.message : String(err);
+    // Don't spam logs for expected failures (no SOL, rate limits)
+    if (!msg.includes("Insufficient")) {
+      console.warn(`On-chain log failed: ${msg.slice(0, 80)}`);
+    }
     return null;
   }
 }
@@ -58,7 +86,7 @@ export async function logConversation(
     messageCount,
     timestamp,
   });
-  return logOnChain(hash);
+  return logOnChain(hash, `convo|${participants.join(",")}|${location}|${messageCount}msgs`);
 }
 
 export async function logReflection(
@@ -72,5 +100,14 @@ export async function logReflection(
     insight: insight.slice(0, 100),
     timestamp,
   });
-  return logOnChain(hash);
+  return logOnChain(hash, `reflect|${agentId}|${insight.slice(0, 40)}`);
+}
+
+export async function logPlanCreated(
+  agentId: string,
+  overview: string,
+  day: number,
+): Promise<string | null> {
+  const hash = hashEvent({ type: "plan", agentId, overview: overview.slice(0, 100), day });
+  return logOnChain(hash, `plan|${agentId}|day${day}`);
 }

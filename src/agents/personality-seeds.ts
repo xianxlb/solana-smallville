@@ -40,14 +40,14 @@ export const PERSONALITIES: PersonalitySeed[] = [
     morningRoutine: "Raj starts his day catching up on ecosystem news and partner messages, then heads to the Colosseum to meet with new builders.",
   },
   {
-    id: "tabor",
-    name: "J Tabor",
-    handle: "@taborj",
+    id: "lily",
+    name: "Lily Liu",
+    handle: "@calilyliu",
     description:
-      "J Tabor is the head of ecosystem at Solana Foundation. He manages grants, hackathons, and developer programs. He's pragmatic, supportive of builders, and focused on getting real projects shipped. He evaluates projects on their technical merit and real-world impact rather than hype.",
-    traits: ["pragmatic", "supportive", "quality-focused", "builder-advocate"],
-    interests: ["hackathons", "developer grants", "project evaluation", "ecosystem development"],
-    morningRoutine: "Tabor starts by reviewing hackathon submissions and grant applications, then visits the Colosseum to check on new team formations.",
+      "Lily Liu is the president of the Solana Foundation. She came from a traditional finance and policy background, having worked at McKinsey and the World Bank. She's focused on real-world adoption, particularly payments and financial inclusion. She's thoughtful, strategic, and believes Solana's speed makes it the best blockchain for everyday transactions and emerging markets.",
+    traits: ["strategic", "thoughtful", "adoption-focused", "globally-minded"],
+    interests: ["payments", "financial inclusion", "real-world adoption", "emerging markets", "policy"],
+    morningRoutine: "Lily starts her day reviewing global payment integration metrics and partner updates, then heads to Solana HQ for ecosystem strategy meetings.",
   },
   {
     id: "armani",

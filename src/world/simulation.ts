@@ -8,6 +8,8 @@ import { decideReaction } from "@/agents/reaction";
 import { startConversation, generateReply, shouldEndConversation, endConversation, conversationToMemories, isOnCooldown } from "@/agents/conversation";
 import { shouldReflect, createMemory } from "@/agents/memory-stream";
 import { generateReflections } from "@/agents/reflection";
+import { logConversation, logReflection, logPlanCreated } from "@/solana/logger";
+import { getWalletAddress } from "@/solana/wallets";
 
 export type EventListener = (event: SimulationEvent) => void;
 
@@ -51,6 +53,7 @@ export class Simulation {
         currentPlan: null,
         status: "idle",
         currentConversation: null,
+        wallet: getWalletAddress(seed.id),
       };
 
       // Seed initial memory from morning routine
@@ -109,6 +112,8 @@ export class Simulation {
         data: { agentId: agent.id, plan: agent.currentPlan },
         timestamp: this.world.currentTime,
       });
+      // Log plan creation on-chain
+      logPlanCreated(agent.id, agent.currentPlan.overview, this.world.currentDay).catch(() => {});
     }
 
     // 2. If in conversation, handle conversation turn
@@ -178,6 +183,8 @@ export class Simulation {
           data: { agentId: agent.id, reflection: r.description },
           timestamp: this.world.currentTime,
         });
+        // Log reflection on-chain
+        logReflection(agent.id, r.description, this.world.currentTime).catch(() => {});
       }
       agent.status = "idle";
     }
@@ -203,6 +210,8 @@ export class Simulation {
         data: { conversationId: convo.id },
         timestamp: this.world.currentTime,
       });
+      // Log conversation on-chain
+      logConversation(convo.participants, convo.location, convo.messages.length, this.world.currentTime).catch(() => {});
       return;
     }
 
@@ -262,6 +271,7 @@ export class Simulation {
         currentLocation: agent.currentLocation,
         currentAction: agent.currentPlan?.currentAction?.description || null,
         conversationId: agent.currentConversation?.id || null,
+        wallet: agent.wallet || null,
         memoryCount: agent.memoryStream.length,
         recentMemories: agent.memoryStream.slice(-5).map((m) => ({
           description: m.description,

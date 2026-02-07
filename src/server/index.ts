@@ -4,6 +4,10 @@ import express from "express";
 import { WebSocketServer, WebSocket } from "ws";
 import http from "http";
 import { Simulation } from "@/world/simulation";
+import { initSolanaLogger, isLoggerEnabled, getOfflineLog } from "@/solana/logger";
+
+// Initialize Solana logger (works without key, just logs locally)
+initSolanaLogger(process.env.SOLANA_PRIVATE_KEY);
 
 const PORT = parseInt(process.env.PORT || "3001");
 
@@ -23,6 +27,24 @@ simulation.onEvent((event) => {
       client.send(message);
     }
   });
+});
+
+// Periodic world snapshot broadcast (every 3 ticks)
+let tickCount = 0;
+simulation.onEvent(() => {
+  tickCount++;
+  if (tickCount % 3 === 0) {
+    const snapshot = JSON.stringify({
+      type: "world_snapshot",
+      data: simulation.getWorldSnapshot(),
+      timestamp: simulation.world.currentTime,
+    });
+    wss.clients.forEach((client) => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(snapshot);
+      }
+    });
+  }
 });
 
 // REST endpoints
@@ -97,6 +119,14 @@ app.post("/api/sim/speed", (req, res) => {
 
 app.get("/api/sim/status", (_req, res) => {
   res.json({ paused: simulation.isPaused(), speed: simulation.getSpeed() });
+});
+
+app.get("/api/solana/status", (_req, res) => {
+  res.json({ enabled: isLoggerEnabled(), eventCount: getOfflineLog().length });
+});
+
+app.get("/api/solana/events", (_req, res) => {
+  res.json(getOfflineLog().slice(-50));
 });
 
 // WebSocket connection

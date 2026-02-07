@@ -45,7 +45,8 @@ Respond in JSON format:
     1000,
   );
   const jsonMatch = text.match(/\{[\s\S]*\}/);
-  let parsed: Record<string, unknown>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let parsed: any;
   try {
     parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : { overview: "Explore the town", activities: [] };
   } catch {

@@ -5,7 +5,7 @@ import { getLocationByName, getLocationCenter, moveToward, isAtLocation, randomP
 import { generateDailyPlan, getCurrentAction, advancePlan } from "@/agents/planning";
 import { perceiveNearbyAgents, observationToMemory } from "@/agents/perception";
 import { decideReaction } from "@/agents/reaction";
-import { startConversation, generateReply, shouldEndConversation, endConversation, conversationToMemories } from "@/agents/conversation";
+import { startConversation, generateReply, shouldEndConversation, endConversation, conversationToMemories, isOnCooldown } from "@/agents/conversation";
 import { shouldReflect, createMemory } from "@/agents/memory-stream";
 import { generateReflections } from "@/agents/reflection";
 
@@ -147,7 +147,8 @@ export class Simulation {
       const memory = await observationToMemory(agent, obs, this.world.currentTime);
       agent.memoryStream.push(memory);
 
-      // 6. Decide reaction
+      // 6. Decide reaction (skip if on cooldown to avoid repeated convos)
+      if (obs.subjectId && isOnCooldown(agent.id, obs.subjectId, this.world.currentTime)) continue;
       const reaction = await decideReaction(agent, obs, this.world.agents, this.world.currentTime);
       if (reaction.type === "start_conversation" && obs.subjectId) {
         const other = this.world.agents.get(reaction.targetAgentId);
@@ -221,9 +222,15 @@ export class Simulation {
     });
   }
 
+  private intervalMs = 2000;
+  private paused = false;
+
   start(intervalMs = 2000) {
+    this.intervalMs = intervalMs;
     console.log(`Simulation started. Day ${this.world.currentDay}, Time: ${this.world.currentTime}`);
-    this.tickInterval = setInterval(() => this.tick(), intervalMs);
+    this.tickInterval = setInterval(() => {
+      if (!this.paused) this.tick();
+    }, intervalMs);
   }
 
   stop() {
@@ -233,6 +240,16 @@ export class Simulation {
     }
     console.log("Simulation stopped.");
   }
+
+  pause() { this.paused = true; }
+  resume() { this.paused = false; }
+  isPaused() { return this.paused; }
+
+  setSpeed(speed: number) {
+    this.simulationSpeed = Math.max(1, Math.min(10, speed));
+  }
+
+  getSpeed() { return this.simulationSpeed; }
 
   getWorldSnapshot() {
     const agents: Record<string, unknown> = {};

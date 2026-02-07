@@ -77,6 +77,28 @@ app.get("/api/conversations/all", (_req, res) => {
   res.json(recent);
 });
 
+// Simulation control
+app.post("/api/sim/pause", (_req, res) => {
+  simulation.pause();
+  res.json({ paused: true });
+});
+
+app.post("/api/sim/resume", (_req, res) => {
+  simulation.resume();
+  res.json({ paused: false });
+});
+
+app.post("/api/sim/speed", (req, res) => {
+  const speed = parseInt(req.body.speed);
+  if (isNaN(speed) || speed < 1 || speed > 10) return res.status(400).json({ error: "Speed must be 1-10" });
+  simulation.setSpeed(speed);
+  res.json({ speed: simulation.getSpeed() });
+});
+
+app.get("/api/sim/status", (_req, res) => {
+  res.json({ paused: simulation.isPaused(), speed: simulation.getSpeed() });
+});
+
 // WebSocket connection
 wss.on("connection", (ws) => {
   console.log("Client connected");

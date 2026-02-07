@@ -4,6 +4,25 @@ import { retrieveMemories, createMemory, scoreImportance } from "./memory-stream
 
 let convoCounter = 0;
 
+// Track cooldowns: "agentA-agentB" => lastConvoEndTime
+const conversationCooldowns = new Map<string, number>();
+const COOLDOWN_MINUTES = 30; // min sim-minutes between conversations with same agent
+
+function cooldownKey(a: string, b: string): string {
+  return [a, b].sort().join("-");
+}
+
+export function isOnCooldown(agentId: string, otherId: string, currentTime: number): boolean {
+  const key = cooldownKey(agentId, otherId);
+  const lastEnd = conversationCooldowns.get(key);
+  if (!lastEnd) return false;
+  return (currentTime - lastEnd) < COOLDOWN_MINUTES;
+}
+
+function setCooldown(agentId: string, otherId: string, currentTime: number): void {
+  conversationCooldowns.set(cooldownKey(agentId, otherId), currentTime);
+}
+
 export function startConversation(
   agent1: AgentState,
   agent2: AgentState,
@@ -87,6 +106,10 @@ export function endConversation(
   currentTime: number,
 ): void {
   conversation.endTime = currentTime;
+  // Set cooldown between participants
+  if (conversation.participants.length === 2) {
+    setCooldown(conversation.participants[0], conversation.participants[1], currentTime);
+  }
   for (const participantId of conversation.participants) {
     const agent = allAgents.get(participantId);
     if (agent) {

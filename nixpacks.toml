@@ -1,0 +1,11 @@
+[phases.build]
+cmds = ["npm install"]
+
+[phases.setup]
+nixPkgs = ["nodejs_22"]
+
+[start]
+cmd = "npx tsx --tsconfig tsconfig.json -r tsconfig-paths/register src/server/index.ts"
+
+[phases.install]
+cmds = ["npm ci || npm install"]

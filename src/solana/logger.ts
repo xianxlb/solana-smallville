@@ -8,7 +8,8 @@ let walletAddress = "";
 let enabled = false;
 
 // Queue for all events (always populated; txHash added when on-chain succeeds)
-const eventLog: Array<{ hash: string; type: string; timestamp: number; txHash?: string }> = [];
+interface EventEntry { hash: string; type: string; timestamp: number; txHash?: string }
+const eventLog: EventEntry[] = [];
 
 export function initSolanaLogger() {
   username = process.env.AGENTWALLET_USERNAME || "";
@@ -43,7 +44,7 @@ export function hashEvent(data: Record<string, unknown>): string {
 // Log event on-chain via AgentWallet self-transfer (1 lamport)
 // The tx hash on devnet serves as immutable proof of the event
 export async function logOnChain(eventHash: string, memo: string): Promise<string | null> {
-  const entry = { hash: eventHash, type: memo.split("|")[0], timestamp: Date.now() };
+  const entry: EventEntry = { hash: eventHash, type: memo.split("|")[0], timestamp: Date.now() };
   eventLog.push(entry);
 
   if (!enabled) return null;

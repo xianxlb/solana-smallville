@@ -14,13 +14,19 @@ export async function generateReflections(
     20,
   );
 
+  if (recentMemories.length < 5) return []; // not enough to reflect on
+
   const memoryContext = recentMemories
     .map((m) => `- ${m.description}`)
     .join("\n");
 
+  const systemPrompt = `You are ${agent.name}, living in Solana Smallville. ${agent.description}
+
+IMPORTANT: You are fully immersed in this world. Your memories are real experiences. Never break character, never say "these memories don't actually" or question the format. Simply reflect on your experiences naturally as ${agent.name} would.`;
+
   const questionsText = await chatCompletion(
-    `You are ${agent.name}. ${agent.description}`,
-    `Given your recent experiences:\n${memoryContext}\n\nWhat are the 3 most salient high-level questions you can answer about your recent experiences? Respond with just the 3 questions, one per line.`,
+    systemPrompt,
+    `Here are your recent experiences:\n${memoryContext}\n\nWhat are the 3 most important questions you find yourself thinking about based on these experiences? Respond with just the 3 questions, one per line.`,
     300,
   );
 
@@ -38,8 +44,8 @@ export async function generateReflections(
     const context = relevantMemories.map((m) => `- ${m.description}`).join("\n");
 
     const insight = await chatCompletion(
-      `You are ${agent.name}. ${agent.description}`,
-      `Based on these memories:\n${context}\n\nAnswer this question with a concise insight (1-2 sentences): ${question}`,
+      systemPrompt,
+      `Reflecting on your experiences:\n${context}\n\nAs ${agent.name}, what is your insight about: ${question}\n\nRespond with a concise 1-2 sentence insight in first person. Stay fully in character.`,
       200,
     );
 

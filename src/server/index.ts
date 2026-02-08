@@ -4,10 +4,10 @@ import express from "express";
 import { WebSocketServer, WebSocket } from "ws";
 import http from "http";
 import { Simulation } from "@/world/simulation";
-import { initSolanaLogger, isLoggerEnabled, getOfflineLog } from "@/solana/logger";
+import { initSolanaLogger, isLoggerEnabled, getEventLog } from "@/solana/logger";
 
-// Initialize Solana logger (works without key, just logs locally)
-initSolanaLogger(process.env.SOLANA_PRIVATE_KEY);
+// Initialize Solana logger via AgentWallet API
+initSolanaLogger();
 
 const PORT = parseInt(process.env.PORT || "3001");
 
@@ -122,11 +122,11 @@ app.get("/api/sim/status", (_req, res) => {
 });
 
 app.get("/api/solana/status", (_req, res) => {
-  res.json({ enabled: isLoggerEnabled(), eventCount: getOfflineLog().length });
+  res.json({ enabled: isLoggerEnabled(), eventCount: getEventLog().length });
 });
 
 app.get("/api/solana/events", (_req, res) => {
-  res.json(getOfflineLog().slice(-50));
+  res.json(getEventLog().slice(-50));
 });
 
 // WebSocket connection

@@ -87,13 +87,16 @@ export class Simulation {
 
     const minuteOfDay = this.world.currentTime % 1440;
 
-    for (const [id, agent] of this.world.agents) {
-      try {
-        await this.tickAgent(agent, minuteOfDay);
-      } catch (err) {
-        console.error(`Error ticking agent ${id}:`, err);
-      }
-    }
+    const agentPromises = Array.from(this.world.agents.entries()).map(
+      async ([id, agent]) => {
+        try {
+          await this.tickAgent(agent, minuteOfDay);
+        } catch (err) {
+          console.error(`Error ticking agent ${id}:`, err);
+        }
+      },
+    );
+    await Promise.all(agentPromises);
   }
 
   private async tickAgent(agent: AgentState, minuteOfDay: number) {
@@ -107,6 +110,7 @@ export class Simulation {
         this.world.currentDay,
         locationNames,
       );
+      console.log(`[${this.world.currentTime}] ${agent.name} planned: ${agent.currentPlan.overview.slice(0, 80)}`);
       this.emit({
         type: "plan_update",
         data: { agentId: agent.id, plan: agent.currentPlan },
@@ -160,6 +164,7 @@ export class Simulation {
         if (other && !other.currentConversation) {
           const convo = startConversation(agent, other, reaction.openingLine, this.world.currentTime);
           this.world.conversations.push(convo);
+          console.log(`[${this.world.currentTime}] CONVO: ${agent.name} → ${other.name}: "${reaction.openingLine.slice(0, 60)}"`);
           this.emit({
             type: "conversation_start",
             data: { conversationId: convo.id, participants: convo.participants, openingLine: reaction.openingLine },
@@ -178,6 +183,7 @@ export class Simulation {
       agent.memoryStream.push(...reflections);
       this.lastReflectionTime.set(agent.id, this.world.currentTime);
       for (const r of reflections) {
+        console.log(`[${this.world.currentTime}] REFLECT: ${agent.name}: "${r.description.slice(0, 80)}"`);
         this.emit({
           type: "reflection",
           data: { agentId: agent.id, reflection: r.description },
@@ -233,12 +239,19 @@ export class Simulation {
 
   private intervalMs = 2000;
   private paused = false;
+  private ticking = false;
 
   start(intervalMs = 2000) {
     this.intervalMs = intervalMs;
     console.log(`Simulation started. Day ${this.world.currentDay}, Time: ${this.world.currentTime}`);
-    this.tickInterval = setInterval(() => {
-      if (!this.paused) this.tick();
+    this.tickInterval = setInterval(async () => {
+      if (this.paused || this.ticking) return;
+      this.ticking = true;
+      try {
+        await this.tick();
+      } finally {
+        this.ticking = false;
+      }
     }, intervalMs);
   }
 

@@ -90,5 +90,5 @@ export function shouldReflect(agent: AgentState, lastReflectionTime: number): bo
     (m) => m.timestamp > lastReflectionTime && m.type !== "reflection",
   );
   const totalImportance = recentMemories.reduce((sum, m) => sum + m.importance, 0);
-  return totalImportance >= 50; // threshold from paper
+  return totalImportance >= 100; // raised from 50 to require more experiences before reflecting
 }

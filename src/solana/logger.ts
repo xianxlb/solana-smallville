@@ -1,30 +1,25 @@
-import { Connection, Keypair, Transaction, TransactionInstruction, PublicKey, sendAndConfirmTransaction } from "@solana/web3.js";
 import crypto from "crypto";
 
-const MEMO_PROGRAM_ID = new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
+const AGENTWALLET_API = "https://agentwallet.mcpay.tech/api/wallets";
 
-let connection: Connection | null = null;
-let payer: Keypair | null = null;
+let username = "";
+let apiToken = "";
+let walletAddress = "";
 let enabled = false;
 
-// Queue for offline logging when Solana is unavailable
-const offlineLog: Array<{ hash: string; type: string; timestamp: number }> = [];
+// Queue for all events (always populated; txHash added when on-chain succeeds)
+const eventLog: Array<{ hash: string; type: string; timestamp: number; txHash?: string }> = [];
 
-export function initSolanaLogger(payerSecret?: string) {
-  const rpcUrl = process.env.SOLANA_RPC_URL || "https://api.devnet.solana.com";
-  connection = new Connection(rpcUrl, "confirmed");
+export function initSolanaLogger() {
+  username = process.env.AGENTWALLET_USERNAME || "";
+  apiToken = process.env.AGENTWALLET_API_TOKEN || "";
+  walletAddress = process.env.AGENTWALLET_SOLANA_ADDRESS || "";
 
-  if (payerSecret) {
-    try {
-      const secretKey = Uint8Array.from(JSON.parse(payerSecret));
-      payer = Keypair.fromSecretKey(secretKey);
-      enabled = true;
-      console.log(`Solana logger initialized. Payer: ${payer.publicKey.toBase58()}`);
-    } catch {
-      console.warn("Invalid SOLANA_PRIVATE_KEY, on-chain logging disabled");
-    }
+  if (username && apiToken && walletAddress) {
+    enabled = true;
+    console.log(`Solana logger initialized via AgentWallet. Address: ${walletAddress}`);
   } else {
-    console.log("No SOLANA_PRIVATE_KEY set, on-chain logging disabled (events logged locally)");
+    console.log("AgentWallet credentials not set, on-chain logging disabled (events logged locally)");
   }
 }
 
@@ -32,8 +27,12 @@ export function isLoggerEnabled(): boolean {
   return enabled;
 }
 
-export function getOfflineLog() {
-  return offlineLog;
+export function getEventLog() {
+  return eventLog;
+}
+
+export function getWalletAddress(): string {
+  return walletAddress;
 }
 
 export function hashEvent(data: Record<string, unknown>): string {
@@ -41,34 +40,42 @@ export function hashEvent(data: Record<string, unknown>): string {
   return crypto.createHash("sha256").update(json).digest("hex");
 }
 
-// Log event hash on-chain using SPL Memo program
+// Log event on-chain via AgentWallet self-transfer (1 lamport)
+// The tx hash on devnet serves as immutable proof of the event
 export async function logOnChain(eventHash: string, memo: string): Promise<string | null> {
-  // Always store locally
-  offlineLog.push({ hash: eventHash, type: memo.split("|")[0], timestamp: Date.now() });
+  const entry = { hash: eventHash, type: memo.split("|")[0], timestamp: Date.now() };
+  eventLog.push(entry);
 
-  if (!connection || !payer || !enabled) {
-    return null;
-  }
+  if (!enabled) return null;
 
   try {
-    const memoData = `smallville|${memo}|${eventHash.slice(0, 16)}`;
-    const transaction = new Transaction().add(
-      new TransactionInstruction({
-        keys: [{ pubkey: payer.publicKey, isSigner: true, isWritable: true }],
-        programId: MEMO_PROGRAM_ID,
-        data: Buffer.from(memoData),
+    const res = await fetch(`${AGENTWALLET_API}/${username}/actions/transfer-solana`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        to: walletAddress, // self-transfer
+        amount: "1", // 1 lamport
+        asset: "sol",
+        network: "devnet",
       }),
-    );
+    });
 
-    const signature = await sendAndConfirmTransaction(connection, transaction, [payer]);
-    console.log(`On-chain: ${memo} tx:${signature.slice(0, 16)}...`);
-    return signature;
+    const data = await res.json();
+    if (data.txHash) {
+      entry.txHash = data.txHash;
+      console.log(`On-chain: ${memo} tx:${data.txHash.slice(0, 16)}...`);
+      return data.txHash;
+    }
+    if (data.error) {
+      console.warn(`On-chain log failed: ${JSON.stringify(data.error).slice(0, 80)}`);
+    }
+    return null;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    // Don't spam logs for expected failures (no SOL, rate limits)
-    if (!msg.includes("Insufficient")) {
-      console.warn(`On-chain log failed: ${msg.slice(0, 80)}`);
-    }
+    console.warn(`On-chain log failed: ${msg.slice(0, 80)}`);
     return null;
   }
 }

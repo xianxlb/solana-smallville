@@ -8,6 +8,12 @@ import MetricsPanel from "./components/MetricsPanel";
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:3001/ws";
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
+// Native resolution → CSS display at 2x
+const NATIVE_W = 480;
+const NATIVE_H = 360;
+const DISPLAY_W = 960;
+const DISPLAY_H = 720;
+
 interface AgentData {
   id: string;
   name: string;
@@ -55,110 +61,109 @@ interface WorldSnapshot {
   locations: LocationData[];
 }
 
-// ─── 16-bit JRPG Palette (bright, saturated, pixel-art town) ────────
+// ─── Kairosoft-Inspired Warm Palette ─────────────────────────────────
 const P = {
-  // Grass — bright saturated greens
-  grass1: "#38b830",
-  grass2: "#2ca828",
-  grass3: "#48c840",
-  grass4: "#209820",
-  grassFlower1: "#f04848",
-  grassFlower2: "#e838a0",
-  grassFlower3: "#d058d8",
+  // Grass — warm vibrant greens
+  grass1: "#5daa38",
+  grass2: "#4c9828",
+  grass3: "#6dba48",
+  grass4: "#3d8820",
 
-  // Paths — warm sandy beige
-  path: "#e0c880",
-  pathLight: "#f0d898",
-  pathDark: "#c8a860",
-  pathEdge: "#b09050",
+  // Paths — warm beige/tan
+  path: "#d4b87a",
+  pathLight: "#e4c88a",
+  pathDark: "#c4a86a",
+  pathEdge: "#a08050",
 
-  // Building walls — thick dark brown (JRPG style)
-  wallOuter: "#5a3a20",
-  wallInner: "#6b4a28",
-  wallDark: "#402810",
+  // Outlines — dark, Kairosoft signature
+  outline: "#2a2018",
 
-  // Building interiors (floor visible from above)
-  floorWood: "#d8a860",
-  floorWoodLight: "#e8c078",
-  floorWoodDark: "#c89848",
-  floorTile: "#b8c8d0",
-  floorTileLight: "#c8d8e0",
-  floorCarpet: "#c04848",
-  floorCarpetLight: "#d06060",
+  // Building roofs — each building gets distinct bright color
+  roofBlue: "#4878c8",
+  roofRed: "#c85848",
+  roofGreen: "#48a868",
+  roofPurple: "#8858a8",
+  roofOrange: "#d88838",
+  roofTeal: "#389888",
+  roofBrown: "#987848",
+  roofGray: "#788090",
 
-  // Furniture
-  desk: "#906838",
-  deskTop: "#b88850",
-  chair: "#c04030",
-  chairAlt: "#3070b8",
-  bookshelf: "#5a3018",
-  bookColors: ["#d83030", "#3070d0", "#30a030", "#d8a020", "#9030b0", "#e06020"],
-  bed: "#e8d8c8",
-  bedSheet: "#90b8e0",
-  counter: "#a07848",
-  table: "#986838",
-  rug: "#b04040",
-  rugLight: "#c86060",
-  plant: "#30a030",
-  plantPot: "#c08040",
+  // Building walls — warm brown
+  wallOuter: "#6b5030",
+  wallInner: "#7b6040",
 
-  // Roof colors per building (visible as eave border)
-  roofGray: "#687080",
-  roofBrown: "#785838",
-  roofBlue: "#4068a0",
-  roofRed: "#a04838",
-  roofTeal: "#387868",
+  // Floors — light indoor tiles
+  floorLight: "#e8dcc8",
+  floorWood: "#d8b878",
+  floorTile: "#d0d8dc",
+  floorCarpet: "#c85858",
 
-  // Trees & foliage — pom-pom style
+  // Furniture (simplified)
+  desk: "#8b6838",
+  deskTop: "#a88050",
+  chair: "#c04848",
+  chairAlt: "#4870b0",
+
+  // Trees
   trunk: "#704820",
-  trunkDark: "#503010",
-  canopy1: "#20a020",
-  canopy2: "#189818",
-  canopy3: "#28a828",
-  canopyHighlight: "#48c838",
-  canopyShadow: "#106010",
+  canopy1: "#3a9830",
+  canopy2: "#2a8820",
+  canopyHi: "#58c848",
+
+  // Decorations
+  flower1: "#e84848",
+  flower2: "#d848a0",
+  flower3: "#e8c838",
 
   // Water
   water: "#4898d0",
-  waterLight: "#68b8e8",
-  waterDark: "#3080b0",
+  waterHi: "#68b8e8",
 
   // UI
   white: "#ffffff",
   black: "#000000",
-  textDark: "#202020",
+  textDark: "#2a2018",
   bubbleBg: "#ffffff",
-  bubbleBorder: "#303030",
-  shadow: "rgba(0,0,0,0.22)",
+  bubbleBorder: "#2a2018",
+  shadow: "rgba(0,0,0,0.18)",
 
   // Doorstep
   doorstep: "#d0b878",
 };
 
 // Per-building style
-const BSTYLES: Record<string, { roof: string; floor: string; furniture: string }> = {
-  "Solana HQ":        { roof: P.roofBlue,  floor: P.floorTile,     furniture: "office" },
-  "DRiP Gallery":     { roof: P.roofGray,  floor: P.floorWood,     furniture: "gallery" },
-  "The Colosseum":    { roof: P.roofRed,   floor: P.floorWood,     furniture: "arena" },
-  "Helius Labs":      { roof: P.roofTeal,  floor: P.floorTile,     furniture: "lab" },
-  "Dev Hub":          { roof: P.roofGray,  floor: P.floorWood,     furniture: "office" },
-  "Learning Center":  { roof: P.roofBrown, floor: P.floorWood,     furniture: "classroom" },
-  "Press Room":       { roof: P.roofBlue,  floor: P.floorCarpet,   furniture: "press" },
-  "Validators' Café": { roof: P.roofBrown, floor: P.floorWood,     furniture: "cafe" },
+const BSTYLES: Record<string, { roof: string; floor: string }> = {
+  "Solana HQ":        { roof: P.roofBlue,   floor: P.floorTile },
+  "DRiP Gallery":     { roof: P.roofPurple, floor: P.floorWood },
+  "The Colosseum":    { roof: P.roofRed,    floor: P.floorWood },
+  "Helius Labs":      { roof: P.roofTeal,   floor: P.floorTile },
+  "Dev Hub":          { roof: P.roofGray,   floor: P.floorWood },
+  "Learning Center":  { roof: P.roofOrange, floor: P.floorWood },
+  "Press Room":       { roof: P.roofGreen,  floor: P.floorCarpet },
+  "Validators' Café": { roof: P.roofBrown,  floor: P.floorLight },
 };
 
-// Per-agent sprite color (hair + shirt) — tiny top-down characters
-const AGENT_SPRITES: Record<string, { hair: string; shirt: string }> = {
-  "Anatoly":  { hair: "#2a2a30", shirt: "#40c888" },
-  "Raj":      { hair: "#1a1a20", shirt: "#4888dd" },
-  "Vibhu":    { hair: "#4a3020", shirt: "#e87030" },
-  "Austin":   { hair: "#c89040", shirt: "#4060c0" },
-  "Mert":     { hair: "#2a2020", shirt: "#d84060" },
-  "Chase":    { hair: "#604020", shirt: "#8040c0" },
-  "Armani":   { hair: "#1a1a20", shirt: "#e0b040" },
-  "Frank":    { hair: "#888888", shirt: "#3a6850" },
+// Per-agent sprite — distinct looks per personality
+interface SpriteStyle {
+  hair: string;
+  shirt: string;
+  skin: string;
+  bald?: boolean;       // Mert
+  beard?: boolean;      // Mert
+  longHair?: boolean;   // Lily (woman)
+  glasses?: boolean;    // Austin
+}
+const AGENT_SPRITES: Record<string, SpriteStyle> = {
+  "Anatoly":  { hair: "#2a2a30", shirt: "#40c888", skin: "#f0c8a0" },                          // dark hair, Solana green shirt
+  "Raj":      { hair: "#1a1a20", shirt: "#4888dd", skin: "#d8a878" },                          // dark hair, blue shirt, tan
+  "Vibhu":    { hair: "#4a3020", shirt: "#e87030", skin: "#d8a878" },                          // brown hair, orange shirt
+  "Austin":   { hair: "#c89040", shirt: "#4060c0", skin: "#f0c8a0", glasses: true },           // blonde, blue shirt, glasses
+  "Mert":     { hair: "#2a2020", shirt: "#282828", skin: "#d0a070", bald: true, beard: true }, // bald, beard, dark shirt
+  "Chase":    { hair: "#604020", shirt: "#8040c0", skin: "#f0c8a0" },                          // brown hair, purple shirt
+  "Armani":   { hair: "#1a1a20", shirt: "#e0b040", skin: "#e0b890" },                          // dark hair, gold shirt
+  "Lily":     { hair: "#1a1a20", shirt: "#d04888", skin: "#f0c8a0", longHair: true },          // long dark hair, pink shirt
 };
-const DEFAULT_SPRITE = { hair: "#4a3a28", shirt: "#5580c0" };
+const DEFAULT_SPRITE: SpriteStyle = { hair: "#4a3a28", shirt: "#5580c0", skin: "#f0c8a0" };
 
 const STATUS_COLORS: Record<string, string> = {
   idle: "#4ade80",
@@ -179,198 +184,137 @@ function pr(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: n
   ctx.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h));
 }
 
-// ─── Grass: bright saturated JRPG tiled background ──────────────────
+// ─── 1px outline rect (Kairosoft signature) ────────────────────────
+function outlineRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
+  ctx.strokeStyle = P.outline;
+  ctx.lineWidth = 1;
+  ctx.strokeRect(Math.round(x) + 0.5, Math.round(y) + 0.5, Math.round(w) - 1, Math.round(h) - 1);
+}
+
+// ─── Grass: warm green tiled background ─────────────────────────────
 function drawGrass(ctx: CanvasRenderingContext2D) {
-  // Base fill — bright green
-  pr(ctx, 0, 0, 800, 600, P.grass1);
+  pr(ctx, 0, 0, NATIVE_W, NATIVE_H, P.grass1);
 
-  // 8x8 tile variation for texture (checkerboard-ish like JRPG)
-  for (let ty = 0; ty < 75; ty++) {
-    for (let tx = 0; tx < 100; tx++) {
+  // 6x6 tile variation
+  for (let ty = 0; ty < NATIVE_H; ty += 6) {
+    for (let tx = 0; tx < NATIVE_W; tx += 6) {
       const h = th(tx, ty);
-      // Alternating tile pattern for JRPG look
-      const checker = (tx + ty) % 2 === 0;
+      const checker = ((tx / 6) + (ty / 6)) % 2 === 0;
       if (checker) {
-        if (h < 300) pr(ctx, tx * 8, ty * 8, 8, 8, P.grass2);
-        else if (h < 500) pr(ctx, tx * 8, ty * 8, 8, 8, P.grass3);
+        if (h < 300) pr(ctx, tx, ty, 6, 6, P.grass2);
+        else if (h < 500) pr(ctx, tx, ty, 6, 6, P.grass3);
       } else {
-        if (h < 200) pr(ctx, tx * 8, ty * 8, 8, 8, P.grass4);
+        if (h < 200) pr(ctx, tx, ty, 6, 6, P.grass4);
       }
 
-      // Scattered tiny flowers
-      if (h > 960) {
-        const fc = h > 985 ? P.grassFlower1 : h > 975 ? P.grassFlower2 : P.grassFlower3;
-        pr(ctx, tx * 8 + (h % 5), ty * 8 + ((h >> 3) % 5), 2, 2, fc);
-      }
-      // Tiny grass detail tufts
-      if (h > 920 && h <= 960) {
-        pr(ctx, tx * 8 + (h % 6), ty * 8 + ((h >> 2) % 6), 2, 3, P.grass4);
+      // Scattered flowers
+      if (h > 970) {
+        const fc = h > 990 ? P.flower1 : h > 980 ? P.flower2 : P.flower3;
+        pr(ctx, tx + (h % 4), ty + ((h >> 3) % 4), 2, 2, fc);
       }
     }
   }
 }
 
-// ─── Paths: wide sandy roads connecting locations ───────────────────
-// The paper uses wide (~24px) sandy paths forming a road network
+// ─── Paths: sandy roads connecting locations ────────────────────────
 function drawPaths(ctx: CanvasRenderingContext2D, locations: LocationData[]) {
-  const W = 24; // path width — wide like the paper
+  const W = 14; // path width at native res
   const half = W / 2;
 
-  // Find Town Square center as hub
   const ts = locations.find(l => l.name === "Town Square");
-  const hub = ts ? { x: ts.x + ts.width / 2, y: ts.y + ts.height / 2 } : { x: 400, y: 240 };
+  const hub = ts ? { x: ts.x + ts.width / 2, y: ts.y + ts.height / 2 } : { x: 240, y: 180 };
 
-  // Draw paths from hub to each location (L-shaped via hub)
   for (const loc of locations) {
     const cx = loc.x + loc.width / 2;
     const cy = loc.y + loc.height / 2;
 
-    // Vertical segment from hub.y to loc center y, at hub.x
     const yMin = Math.min(hub.y, cy);
     const yMax = Math.max(hub.y, cy);
-    drawPathRect(ctx, hub.x - half, yMin - half, W, yMax - yMin + W, W);
+    drawPathRect(ctx, hub.x - half, yMin - half, W, yMax - yMin + W);
 
-    // Horizontal segment from hub.x to loc center x, at cy
     const xMin = Math.min(hub.x, cx);
     const xMax = Math.max(hub.x, cx);
-    drawPathRect(ctx, xMin - half, cy - half, xMax - xMin + W, W, W);
-  }
-
-  // Extra connecting paths between nearby buildings
-  const conn = [
-    ["Solana HQ", "Helius Labs"],
-    ["Solana HQ", "Press Room"],
-    ["The Colosseum", "Learning Center"],
-    ["Dev Hub", "Validators' Café"],
-  ];
-  for (const [a, b] of conn) {
-    const la = locations.find(l => l.name === a);
-    const lb = locations.find(l => l.name === b);
-    if (la && lb) {
-      const ax = la.x + la.width / 2, ay = la.y + la.height / 2;
-      const bx = lb.x + lb.width / 2, by = lb.y + lb.height / 2;
-      // Horizontal then vertical
-      drawPathRect(ctx, Math.min(ax, bx) - half, ay - half, Math.abs(bx - ax) + W, W, W);
-      drawPathRect(ctx, bx - half, Math.min(ay, by) - half, W, Math.abs(by - ay) + W, W);
-    }
+    drawPathRect(ctx, xMin - half, cy - half, xMax - xMin + W, W);
   }
 }
 
-function drawPathRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, _pathW: number) {
-  // Main path fill
+function drawPathRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
   pr(ctx, x, y, w, h, P.path);
-  // Edge darkening (2px borders for JRPG crisp look)
-  pr(ctx, x, y, w, 2, P.pathEdge);
-  pr(ctx, x, y + h - 2, w, 2, P.pathEdge);
-  pr(ctx, x, y, 2, h, P.pathEdge);
-  pr(ctx, x + w - 2, y, 2, h, P.pathEdge);
-  // Sandy texture variation
-  for (let py = y + 2; py < y + h - 2; py += 8) {
-    for (let px = x + 2; px < x + w - 2; px += 8) {
+  // Edge lines
+  pr(ctx, x, y, w, 1, P.pathEdge);
+  pr(ctx, x, y + h - 1, w, 1, P.pathEdge);
+  pr(ctx, x, y, 1, h, P.pathEdge);
+  pr(ctx, x + w - 1, y, 1, h, P.pathEdge);
+  // Subtle texture
+  for (let py = y + 1; py < y + h - 1; py += 6) {
+    for (let px = x + 1; px < x + w - 1; px += 6) {
       const v = th(px + 300, py + 300);
-      if (v < 200) pr(ctx, px + (v % 5), py + ((v >> 2) % 5), 3, 3, P.pathLight);
-      if (v > 800) pr(ctx, px + (v % 4), py + ((v >> 2) % 4), 2, 2, P.pathDark);
+      if (v < 150) pr(ctx, px + (v % 3), py + ((v >> 2) % 3), 3, 3, P.pathLight);
+      if (v > 850) pr(ctx, px + (v % 3), py + ((v >> 2) % 3), 2, 2, P.pathDark);
     }
   }
 }
 
-// ─── Trees: pom-pom style round canopy with visible trunk ───────────
-function drawTree(ctx: CanvasRenderingContext2D, x: number, y: number, size: number = 1) {
-  const s = size;
-  // Shadow on ground (darker, more visible)
+// ─── Trees: round canopy with trunk ─────────────────────────────────
+function drawTree(ctx: CanvasRenderingContext2D, x: number, y: number) {
+  // Shadow
   ctx.fillStyle = P.shadow;
   ctx.beginPath();
-  ctx.ellipse(x, y + 5 * s, 12 * s, 5 * s, 0, 0, Math.PI * 2);
+  ctx.ellipse(x, y + 3, 6, 2.5, 0, 0, Math.PI * 2);
   ctx.fill();
-
-  // Visible trunk (taller, like JRPG trees)
-  pr(ctx, x - 3 * s, y - 8 * s, 6 * s, 14 * s, P.trunk);
-  pr(ctx, x - 2 * s, y - 8 * s, 4 * s, 14 * s, P.trunkDark);
-  // Trunk highlight
-  pr(ctx, x - 1 * s, y - 6 * s, 2 * s, 10 * s, P.trunk);
-
-  // Canopy — big round pom-pom (single large circle + smaller bumps)
-  const drawPom = (cx: number, cy: number, r: number, color: string) => {
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    ctx.fill();
-  };
-  // Shadow underneath canopy
-  drawPom(x + 1 * s, y - 12 * s, 14 * s, P.canopyShadow);
-  // Main big pom-pom
-  drawPom(x, y - 14 * s, 14 * s, P.canopy1);
-  // Bumpy top poms
-  drawPom(x - 6 * s, y - 18 * s, 8 * s, P.canopy2);
-  drawPom(x + 6 * s, y - 18 * s, 7 * s, P.canopy3);
-  drawPom(x, y - 20 * s, 8 * s, P.canopy2);
-  // Highlights (bright spots on top)
-  drawPom(x - 3 * s, y - 20 * s, 5 * s, P.canopyHighlight);
-  drawPom(x + 4 * s, y - 16 * s, 4 * s, P.canopyHighlight);
-}
-
-function drawSmallTree(ctx: CanvasRenderingContext2D, x: number, y: number) {
-  drawTree(ctx, x, y, 0.55);
-}
-
-// ─── Bush: small round pom-pom shrub ────────────────────────────────
-function drawBush(ctx: CanvasRenderingContext2D, x: number, y: number) {
-  ctx.fillStyle = P.shadow;
-  ctx.beginPath();
-  ctx.ellipse(x, y + 2, 7, 3, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Main bush body
+  // Trunk
+  pr(ctx, x - 1, y - 4, 3, 7, P.trunk);
+  // Canopy
   ctx.fillStyle = P.canopy1;
   ctx.beginPath();
-  ctx.arc(x, y - 3, 8, 0, Math.PI * 2);
+  ctx.arc(x, y - 7, 6, 0, Math.PI * 2);
   ctx.fill();
-  // Top bump
-  ctx.fillStyle = P.canopy3;
+  // Highlight
+  ctx.fillStyle = P.canopyHi;
   ctx.beginPath();
-  ctx.arc(x - 2, y - 6, 5, 0, Math.PI * 2);
+  ctx.arc(x - 2, y - 9, 3, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = P.canopyHighlight;
+  // 1px outline
+  ctx.strokeStyle = P.outline;
+  ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.arc(x + 2, y - 5, 4, 0, Math.PI * 2);
-  ctx.fill();
-  // Tiny flower on bush
-  const v = th(Math.round(x), Math.round(y));
-  if (v < 300) {
-    pr(ctx, x - 1, y - 7, 2, 2, P.grassFlower1);
-  }
+  ctx.arc(x, y - 7, 6, 0, Math.PI * 2);
+  ctx.stroke();
 }
 
-// ─── Scatter decoration positions ───────────────────────────────────
-interface Deco { type: "tree" | "smalltree" | "bush"; x: number; y: number }
+function drawBush(ctx: CanvasRenderingContext2D, x: number, y: number) {
+  ctx.fillStyle = P.canopy1;
+  ctx.beginPath();
+  ctx.arc(x, y - 2, 4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = P.canopyHi;
+  ctx.beginPath();
+  ctx.arc(x - 1, y - 3, 2, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+// ─── Decoration positions (scaled for 320x240) ──────────────────────
+interface Deco { type: "tree" | "bush"; x: number; y: number }
 
 const DECOS: Deco[] = (() => {
   const d: Deco[] = [];
-  // Trees around map edges
+  // Trees spread around the full 480x360 map
   const treePts: [number, number][] = [
-    [25, 40], [65, 30], [15, 90], [90, 60],
-    [730, 30], [760, 55], [780, 90], [700, 45],
-    [20, 530], [55, 560], [90, 545], [740, 540], [770, 565], [695, 555],
-    [15, 180], [30, 330], [20, 440],
-    [775, 180], [770, 350], [780, 470],
-    [310, 15], [520, 10], [620, 15],
-    [200, 575], [400, 580], [580, 575],
+    [105, 90], [115, 200], [170, 195],         // between left buildings
+    [345, 25], [345, 90], [345, 180],           // middle column
+    [465, 100], [465, 180], [465, 300],         // right edge
+    [15, 230], [100, 345], [175, 345],          // bottom left
+    [300, 345], [420, 345],                     // bottom right
+    [240, 185],                                 // between town square and colosseum
   ];
   for (const [x, y] of treePts) d.push({ type: "tree", x, y });
 
-  // Small trees near paths
-  const stPts: [number, number][] = [
-    [160, 195], [275, 145], [335, 95], [560, 95],
-    [745, 200], [745, 410], [160, 370], [275, 460],
-    [440, 470], [630, 455], [335, 355],
-  ];
-  for (const [x, y] of stPts) d.push({ type: "smalltree", x, y });
-
   // Bushes near buildings
   const bushPts: [number, number][] = [
-    [95, 115], [225, 105], [555, 95], [725, 105],
-    [95, 395], [225, 500], [445, 440], [605, 415],
-    [595, 305], [250, 295], [455, 195],
+    [100, 25], [210, 25], [370, 85],
+    [100, 145], [170, 115], [280, 115],
+    [310, 290], [375, 210],
+    [100, 280], [280, 210],
   ];
   for (const [x, y] of bushPts) d.push({ type: "bush", x, y });
 
@@ -380,102 +324,250 @@ const DECOS: Deco[] = (() => {
 function drawDecorations(ctx: CanvasRenderingContext2D) {
   for (const d of DECOS) {
     if (d.type === "tree") drawTree(ctx, d.x, d.y);
-    else if (d.type === "smalltree") drawSmallTree(ctx, d.x, d.y);
     else drawBush(ctx, d.x, d.y);
   }
 }
 
-// ─── Buildings: each themed to its real-world counterpart ───────────
+// ─── Building: Kairosoft-style colored roof + 1px outline ───────────
 
-function drawBuildingTopDown(ctx: CanvasRenderingContext2D, loc: LocationData) {
-  // Dispatch to themed renderer
-  switch (loc.name) {
-    case "The Colosseum": return drawColosseum(ctx, loc);
-    case "DRiP Gallery": return drawGallery(ctx, loc);
-    case "Validators' Café": return drawCafe(ctx, loc);
-    case "Solana HQ": return drawSolanaHQ(ctx, loc);
-    case "Helius Labs": return drawHeliusLabs(ctx, loc);
-    case "Dev Hub": return drawDevHub(ctx, loc);
-    case "Learning Center": return drawLearningCenter(ctx, loc);
-    case "Press Room": return drawPressRoom(ctx, loc);
-    default: return drawGenericBuilding(ctx, loc);
-  }
-}
+function drawBuilding(ctx: CanvasRenderingContext2D, loc: LocationData) {
+  const { x, y, width: w, height: h, name } = loc;
+  const style = BSTYLES[name] || { roof: P.roofGray, floor: P.floorWood };
+  const wallT = 3; // wall thickness at native res
 
-// Helper: draw a standard rectangular building shell (thick dark walls + floor + door)
-function drawBuildingShell(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, roofColor: string, floorColor: string) {
-  const wallT = 6; // Thick dark brown walls (JRPG style)
   // Shadow
   ctx.fillStyle = P.shadow;
-  ctx.fillRect(x + 4, y + 4, w, h);
-  // Outer wall — thick dark brown
-  pr(ctx, x, y, w, h, P.wallOuter);
-  // Inner wall highlight
-  pr(ctx, x + 1, y + 1, w - 2, h - 2, P.wallInner);
-  // Inner dark wall
-  pr(ctx, x + 2, y + 2, w - 4, h - 4, P.wallOuter);
-  // Inner floor
-  pr(ctx, x + wallT, y + wallT, w - wallT * 2, h - wallT * 2, floorColor);
+  ctx.fillRect(x + 2, y + 2, w, h);
 
-  // Wood plank floor pattern (horizontal lines)
-  const isWood = floorColor === P.floorWood;
-  const isTile = floorColor === P.floorTile;
-  const isCarpet = floorColor === P.floorCarpet;
-  const ix = x + wallT, iy = y + wallT, iw = w - wallT * 2, ih = h - wallT * 2;
+  // Colored roof (top strip — 30% of height)
+  const roofH = Math.max(4, Math.floor(h * 0.3));
+  pr(ctx, x, y, w, roofH, style.roof);
+  // Roof shadow stripe
+  pr(ctx, x, y + roofH - 2, w, 2, P.outline);
 
-  if (isWood) {
-    // Horizontal plank lines
-    for (let fy = iy; fy < iy + ih; fy += 6) {
-      pr(ctx, ix, fy, iw, 1, P.floorWoodDark);
-      // Alternating light/dark planks
-      if ((fy - iy) % 12 < 6) {
-        pr(ctx, ix, fy + 1, iw, 5, P.floorWoodLight);
-      }
-      // Knot detail
-      const v = th(fy * 7, 123);
-      if (v < 100) pr(ctx, ix + (v % iw), fy + 2, 2, 2, P.floorWoodDark);
-    }
-  } else if (isTile) {
-    // Checkerboard tile pattern
-    for (let fy = iy; fy < iy + ih; fy += 8) {
-      for (let fx = ix; fx < ix + iw; fx += 8) {
-        if (((fx - ix) / 8 + (fy - iy) / 8) % 2 === 0) {
-          pr(ctx, fx, fy, 8, 8, P.floorTileLight);
+  // Walls
+  pr(ctx, x, y + roofH, w, h - roofH, P.wallOuter);
+  pr(ctx, x + 1, y + roofH, w - 2, h - roofH - 1, P.wallInner);
+
+  // Floor interior
+  pr(ctx, x + wallT, y + roofH, w - wallT * 2, h - roofH - wallT, style.floor);
+
+  // Simple floor texture
+  if (style.floor === P.floorTile) {
+    // Checkerboard
+    for (let fy = y + roofH; fy < y + h - wallT; fy += 4) {
+      for (let fx = x + wallT; fx < x + w - wallT; fx += 4) {
+        if (((fx - x) / 4 + (fy - y) / 4) % 2 === 0) {
+          pr(ctx, fx, fy, 4, 4, "#dce4e8");
         }
-        // Grout lines
-        pr(ctx, fx, fy, 8, 1, "#a0b0b8");
-        pr(ctx, fx, fy, 1, 8, "#a0b0b8");
       }
     }
-  } else if (isCarpet) {
-    // Carpet with border pattern
-    pr(ctx, ix + 2, iy + 2, iw - 4, ih - 4, P.floorCarpetLight);
-    pr(ctx, ix + 4, iy + 4, iw - 8, ih - 8, P.floorCarpet);
+  } else if (style.floor === P.floorWood) {
+    // Horizontal plank lines
+    for (let fy = y + roofH; fy < y + h - wallT; fy += 3) {
+      pr(ctx, x + wallT, fy, w - wallT * 2, 1, "#c8a868");
+    }
   }
 
-  // Door — gap in bottom wall with doorstep
-  const doorX = x + Math.floor(w / 2) - 7;
-  pr(ctx, doorX, y + h - wallT, 14, wallT, floorColor);
-  // Doorstep (stone/beige step outside)
-  pr(ctx, doorX - 1, y + h, 16, 4, P.doorstep);
-  pr(ctx, doorX, y + h + 1, 14, 2, P.pathLight);
+  // Door — gap at bottom center
+  const doorW = Math.max(4, Math.floor(w * 0.15));
+  const doorX = x + Math.floor(w / 2) - Math.floor(doorW / 2);
+  pr(ctx, doorX, y + h - wallT, doorW, wallT, style.floor);
+  // Doorstep
+  pr(ctx, doorX, y + h, doorW, 2, P.doorstep);
+
+  // Simple interior details per building
+  drawBuildingInterior(ctx, loc, style);
+
+  // 1px dark outline (Kairosoft signature)
+  outlineRect(ctx, x, y, w, h);
+
+  // Label below building
+  drawBuildingLabel(ctx, name, x + w / 2, y + h);
+}
+
+function drawBuildingInterior(ctx: CanvasRenderingContext2D, loc: LocationData, style: { roof: string; floor: string }) {
+  const { x, y, width: w, height: h, name } = loc;
+  const roofH = Math.max(4, Math.floor(h * 0.3));
+  const ix = x + 3;
+  const iy = y + roofH + 1;
+  const iw = w - 6;
+  const ih = h - roofH - 3;
+
+  switch (name) {
+    case "Solana HQ": {
+      // Desks with monitors
+      for (let r = 0; r < 2; r++) {
+        const dy = iy + 2 + r * 12;
+        pr(ctx, ix + 1, dy, iw - 2, 4, P.desk);
+        // Monitors
+        for (let m = 0; m < Math.min(3, Math.floor(iw / 10)); m++) {
+          pr(ctx, ix + 3 + m * 9, dy - 2, 4, 3, "#181828");
+          pr(ctx, ix + 4 + m * 9, dy - 1, 2, 1, "#38c888");
+        }
+      }
+      break;
+    }
+    case "DRiP Gallery": {
+      // Art frames on top wall
+      const artColors = ["#e03030", "#2060d0", "#30a830", "#e8a018"];
+      for (let i = 0; i < Math.min(3, Math.floor(iw / 10)); i++) {
+        pr(ctx, ix + 2 + i * 10, iy + 1, 6, 5, P.outline);
+        pr(ctx, ix + 3 + i * 10, iy + 2, 4, 3, artColors[i % artColors.length]);
+      }
+      break;
+    }
+    case "Validators' Café": {
+      // Counter at top
+      pr(ctx, ix + 1, iy + 1, iw - 2, 4, P.desk);
+      pr(ctx, ix + 2, iy + 2, iw - 4, 2, P.deskTop);
+      // Tables
+      for (let t = 0; t < 2; t++) {
+        const tx2 = ix + 3 + t * Math.floor(iw / 2);
+        pr(ctx, tx2, iy + ih - 8, 5, 3, P.desk);
+        pr(ctx, tx2 - 2, iy + ih - 6, 2, 2, P.chair);
+        pr(ctx, tx2 + 5, iy + ih - 6, 2, 2, P.chairAlt);
+      }
+      break;
+    }
+    case "Helius Labs": {
+      // Dashboard screen
+      pr(ctx, ix + 1, iy + 1, iw - 2, 6, "#141820");
+      for (let i = 0; i < Math.min(4, Math.floor(iw / 6)); i++) {
+        const bh = 2 + (th(i * 100, 0) % 3);
+        pr(ctx, ix + 3 + i * 5, iy + 6 - bh, 3, bh, i % 2 === 0 ? "#38a0d0" : "#58d0a0");
+      }
+      // Lab bench
+      pr(ctx, ix + 2, iy + 10, iw - 4, 3, "#808898");
+      break;
+    }
+    case "Dev Hub": {
+      // Long tables with laptops
+      for (let r = 0; r < 2; r++) {
+        const dy = iy + 2 + r * 12;
+        pr(ctx, ix + 2, dy, iw - 4, 4, P.desk);
+        for (let l = 0; l < Math.min(3, Math.floor(iw / 10)); l++) {
+          pr(ctx, ix + 4 + l * 8, dy + 1, 4, 2, "#303038");
+          pr(ctx, ix + 5 + l * 8, dy + 1, 2, 1, "#4080cc");
+        }
+      }
+      break;
+    }
+    case "Learning Center": {
+      // Whiteboard
+      pr(ctx, ix + 2, iy + 1, iw - 4, 5, "#f0f0f0");
+      pr(ctx, ix + 3, iy + 2, 8, 1, "#3058a0");
+      pr(ctx, ix + 3, iy + 4, 6, 1, "#3058a0");
+      // Desks
+      for (let r = 0; r < 2; r++) {
+        for (let c = 0; c < 2; c++) {
+          pr(ctx, ix + 2 + c * Math.floor(iw / 2), iy + 9 + r * 8, 8, 3, P.desk);
+        }
+      }
+      break;
+    }
+    case "Press Room": {
+      // Podium
+      const cx2 = ix + Math.floor(iw / 2);
+      pr(ctx, cx2 - 4, iy + 2, 8, 5, P.desk);
+      pr(ctx, cx2 - 3, iy + 3, 6, 3, P.deskTop);
+      // Chairs
+      for (let c = 0; c < Math.min(3, Math.floor(iw / 8)); c++) {
+        pr(ctx, ix + 2 + c * 7, iy + ih - 5, 4, 3, P.chair);
+      }
+      break;
+    }
+  }
 }
 
 function drawBuildingLabel(ctx: CanvasRenderingContext2D, name: string, cx: number, bottomY: number) {
-  ctx.font = "bold 8px sans-serif";
-  const tw = ctx.measureText(name).width + 8;
-  // Background plate
-  ctx.fillStyle = "rgba(0,0,0,0.45)";
-  ctx.beginPath();
-  ctx.roundRect(cx - tw / 2, bottomY + 7, tw, 13, 2);
-  ctx.fill();
-  // Text
-  ctx.fillStyle = "#ffffff";
+  ctx.font = "bold 10px monospace";
   ctx.textAlign = "center";
-  ctx.fillText(name, cx, bottomY + 17);
+  const tw = ctx.measureText(name).width + 8;
+  // Dark background plate
+  pr(ctx, cx - tw / 2, bottomY + 4, tw, 13, "rgba(0,0,0,0.65)");
+  // 1px border
+  ctx.strokeStyle = "rgba(255,255,255,0.3)";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(Math.round(cx - tw / 2) + 0.5, bottomY + 4.5, tw - 1, 12);
+  // White text
+  ctx.fillStyle = "#ffffff";
+  ctx.fillText(name, cx, bottomY + 14);
 }
 
-// ─── The Colosseum: circular arena with tiered seating ──────────────
+// ─── Outdoor locations ──────────────────────────────────────────────
+function drawOutdoor(ctx: CanvasRenderingContext2D, loc: LocationData) {
+  const { x, y, width: w, height: h, name } = loc;
+  const cx = x + w / 2;
+  const cy = y + h / 2;
+
+  if (name === "Town Square") {
+    // Cobblestone plaza
+    for (let ty2 = y; ty2 < y + h; ty2 += 6) {
+      for (let tx2 = x; tx2 < x + w; tx2 += 6) {
+        const v = th(tx2 + 500, ty2 + 500);
+        const offset = (Math.floor((ty2 - y) / 6) % 2) * 3;
+        const c = v < 300 ? "#d0b888" : v < 600 ? "#c0a878" : "#dcc898";
+        pr(ctx, tx2 + offset, ty2, 6, 6, c);
+        pr(ctx, tx2 + offset, ty2, 6, 1, "#a08858");
+        pr(ctx, tx2 + offset, ty2, 1, 6, "#a08858");
+      }
+    }
+
+    // Fountain
+    ctx.fillStyle = "#909898";
+    ctx.beginPath();
+    ctx.arc(cx, cy, 10, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = P.water;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 7, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = P.waterHi;
+    ctx.beginPath();
+    ctx.arc(cx - 2, cy - 2, 3, 0, Math.PI * 2);
+    ctx.fill();
+    // Center pillar
+    pr(ctx, cx - 1, cy - 7, 3, 5, "#808890");
+    // Outline
+    ctx.strokeStyle = P.outline;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 10, 0, Math.PI * 2);
+    ctx.stroke();
+
+    drawBuildingLabel(ctx, "Town Square", cx, y + h);
+
+  } else if (name === "Consensus Park") {
+    // Brighter grass patch
+    pr(ctx, x, y, w, h, P.grass3);
+    // Flowers
+    for (let fy = y + 3; fy < y + h - 3; fy += 7) {
+      for (let fx = x + 3; fx < x + w - 3; fx += 7) {
+        const v = th(fx + 999, fy + 999);
+        if (v < 60) pr(ctx, fx, fy, 2, 2, P.flower1);
+        if (v > 940) pr(ctx, fx, fy, 2, 2, P.flower3);
+      }
+    }
+
+    // Trees
+    drawTree(ctx, x + 12, cy - 6);
+    drawTree(ctx, x + w - 12, cy - 6);
+
+    // Bench
+    pr(ctx, cx - 6, cy + 5, 12, 3, P.trunk);
+    pr(ctx, cx - 6, cy + 4, 12, 2, P.trunk);
+
+    // Stone path
+    for (let px = x; px < x + w; px += 6) {
+      pr(ctx, px, cy - 2, 6, 4, P.path);
+    }
+
+    drawBuildingLabel(ctx, "Consensus Park", cx, y + h);
+  }
+}
+
+// ─── The Colosseum: special circular building ───────────────────────
 function drawColosseum(ctx: CanvasRenderingContext2D, loc: LocationData) {
   const cx = loc.x + loc.width / 2;
   const cy = loc.y + loc.height / 2;
@@ -485,488 +577,70 @@ function drawColosseum(ctx: CanvasRenderingContext2D, loc: LocationData) {
   // Shadow
   ctx.fillStyle = P.shadow;
   ctx.beginPath();
-  ctx.ellipse(cx + 4, cy + 4, rx, ry, 0, 0, Math.PI * 2);
+  ctx.ellipse(cx + 2, cy + 2, rx, ry, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // Outer wall (thick dark brown like buildings)
-  ctx.fillStyle = P.wallOuter;
+  // Outer wall
+  ctx.fillStyle = P.roofRed;
   ctx.beginPath();
   ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // Inner wall ring
+  // Inner ring
   ctx.fillStyle = P.wallInner;
   ctx.beginPath();
   ctx.ellipse(cx, cy, rx - 2, ry - 2, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // Seating area (stone)
+  // Seating area
   ctx.fillStyle = "#c0a878";
   ctx.beginPath();
-  ctx.ellipse(cx, cy, rx - 6, ry - 6, 0, 0, Math.PI * 2);
+  ctx.ellipse(cx, cy, rx - 4, ry - 4, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // Inner seating tiers
-  const tiers = [
-    { rx: rx * 0.75, ry: ry * 0.75, color: "#b09868" },
-    { rx: rx * 0.6, ry: ry * 0.6, color: "#c8b080" },
-  ];
-  for (const tier of tiers) {
-    ctx.fillStyle = tier.color;
-    ctx.beginPath();
-    ctx.ellipse(cx, cy, tier.rx, tier.ry, 0, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  // Seats (pixel-art colored blocks)
-  const seatColors = [P.chair, P.chairAlt, "#d0a830", "#40a050"];
-  for (let angle = 0; angle < Math.PI * 2; angle += 0.3) {
-    for (let tierIdx = 0; tierIdx < 2; tierIdx++) {
-      const sr = rx * (0.55 + tierIdx * 0.15);
-      const srY = ry * (0.55 + tierIdx * 0.15);
-      const sx = cx + Math.cos(angle) * sr - 2;
-      const sy = cy + Math.sin(angle) * srY - 2;
-      pr(ctx, sx, sy, 4, 3, seatColors[(tierIdx + Math.floor(angle * 3)) % seatColors.length]);
-    }
-  }
-
-  // Central arena floor (sand)
+  // Arena floor
   ctx.fillStyle = "#dcc898";
   ctx.beginPath();
-  ctx.ellipse(cx, cy, rx * 0.35, ry * 0.35, 0, 0, Math.PI * 2);
+  ctx.ellipse(cx, cy, rx * 0.4, ry * 0.4, 0, 0, Math.PI * 2);
   ctx.fill();
-  // Central podium
-  pr(ctx, cx - 6, cy - 4, 12, 8, P.desk);
-  pr(ctx, cx - 4, cy - 2, 8, 4, P.deskTop);
 
-  // Archway openings (gaps in thick wall)
-  const archColor = "#dcc898";
-  pr(ctx, cx - 7, loc.y - 1, 14, 8, archColor);
-  pr(ctx, cx - 7, loc.y + loc.height - 7, 14, 8, archColor);
-  pr(ctx, loc.x - 1, cy - 6, 8, 12, archColor);
-  pr(ctx, loc.x + loc.width - 7, cy - 6, 8, 12, archColor);
+  // Seats (tiny colored pixels)
+  const seatColors = [P.chair, P.chairAlt, "#d0a830", "#40a050"];
+  for (let angle = 0; angle < Math.PI * 2; angle += 0.5) {
+    const sr = rx * 0.65;
+    const srY = ry * 0.65;
+    const sx = cx + Math.cos(angle) * sr;
+    const sy = cy + Math.sin(angle) * srY;
+    pr(ctx, sx - 1, sy - 1, 2, 2, seatColors[Math.floor(angle * 2) % seatColors.length]);
+  }
+
+  // Center podium
+  pr(ctx, cx - 2, cy - 1, 4, 3, P.desk);
+
+  // 1px outline
+  ctx.strokeStyle = P.outline;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Archway openings
+  pr(ctx, cx - 3, loc.y, 6, 3, "#dcc898");
+  pr(ctx, cx - 3, loc.y + loc.height - 3, 6, 3, "#dcc898");
 
   drawBuildingLabel(ctx, loc.name, cx, loc.y + loc.height);
 }
 
-// ─── DRiP Gallery: art gallery with paintings on walls ──────────────
-function drawGallery(ctx: CanvasRenderingContext2D, loc: LocationData) {
-  const { x, y, width: w, height: h } = loc;
-  drawBuildingShell(ctx, x, y, w, h, P.roofGray, P.floorWood);
-
-  const ix = x + 8, iy = y + 8, iw = w - 16, ih = h - 16;
-
-  // Art frames along top wall (colorful pixel-art paintings)
-  const artColors = ["#e03030", "#2060d0", "#30a830", "#e8a018", "#9030b0", "#e06818"];
-  for (let i = 0; i < Math.min(4, Math.floor(iw / 22)); i++) {
-    const ax = ix + 4 + i * 22;
-    pr(ctx, ax, iy + 1, 16, 14, P.wallDark); // frame border
-    pr(ctx, ax + 1, iy + 2, 14, 12, "#d8d0c0"); // frame mat
-    pr(ctx, ax + 2, iy + 3, 12, 10, artColors[i % artColors.length]); // painting
-    // Painting detail (simple pixel shapes)
-    pr(ctx, ax + 5, iy + 5, 4, 4, "rgba(255,255,255,0.3)");
-  }
-
-  // Art frames along bottom wall
-  for (let i = 0; i < Math.min(4, Math.floor(iw / 22)); i++) {
-    const ax = ix + 4 + i * 22;
-    pr(ctx, ax, iy + ih - 16, 16, 14, P.wallDark);
-    pr(ctx, ax + 1, iy + ih - 15, 14, 12, "#d8d0c0");
-    pr(ctx, ax + 2, iy + ih - 14, 12, 10, artColors[(i + 3) % artColors.length]);
-  }
-
-  // Central viewing bench
-  pr(ctx, ix + iw / 2 - 10, iy + ih / 2, 20, 4, "#686868");
-  pr(ctx, ix + iw / 2 - 8, iy + ih / 2 + 1, 16, 2, "#888888");
-
-  // Potted plant in corner
-  pr(ctx, ix + iw - 8, iy + 2, 6, 4, P.plantPot);
-  pr(ctx, ix + iw - 7, iy - 2, 4, 4, P.plant);
-  pr(ctx, ix + iw - 9, iy - 4, 2, 3, P.plant);
-
-  // Sculpture pedestal
-  pr(ctx, ix + 2, iy + ih / 2 - 4, 8, 8, "#c8c0b8");
-  pr(ctx, ix + 3, iy + ih / 2 - 7, 6, 4, "#a090b8");
-
-  drawBuildingLabel(ctx, loc.name, x + w / 2, y + h);
-}
-
-// ─── Validators' Café: cozy café with counter, tables, chairs ───────
-function drawCafe(ctx: CanvasRenderingContext2D, loc: LocationData) {
-  const { x, y, width: w, height: h } = loc;
-  drawBuildingShell(ctx, x, y, w, h, P.roofBrown, P.floorWood);
-
-  const ix = x + 8, iy = y + 8, iw = w - 16, ih = h - 16;
-
-  // Long counter along top wall
-  pr(ctx, ix + 2, iy + 2, iw - 4, 12, P.counter);
-  pr(ctx, ix + 3, iy + 3, iw - 6, 10, P.deskTop);
-  // Coffee machine
-  pr(ctx, ix + 4, iy + 3, 8, 8, "#383838");
-  pr(ctx, ix + 5, iy + 4, 6, 4, "#c03020"); // red panel
-  pr(ctx, ix + 6, iy + 5, 4, 2, "#f0a020"); // light
-  // Cups on counter
-  pr(ctx, ix + 16, iy + 5, 3, 4, "#f0f0f0");
-  pr(ctx, ix + 22, iy + 5, 3, 4, "#e0d0b0");
-
-  // Bar stools
-  for (let i = 0; i < Math.min(3, Math.floor(iw / 20)); i++) {
-    const sx = ix + 14 + i * 18;
-    ctx.fillStyle = P.trunk;
-    ctx.beginPath();
-    ctx.arc(sx, iy + 18, 3, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  // Round tables with chairs
-  const tables: [number, number][] = [
-    [ix + 6, iy + ih / 2 + 4],
-    [ix + iw / 2 - 4, iy + ih / 2 + 4],
-    [ix + iw - 16, iy + ih / 2 + 4],
-  ];
-  for (const [tx, ty] of tables) {
-    ctx.fillStyle = P.table;
-    ctx.beginPath();
-    ctx.arc(tx + 5, ty + 3, 6, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = P.deskTop;
-    ctx.beginPath();
-    ctx.arc(tx + 5, ty + 3, 4, 0, Math.PI * 2);
-    ctx.fill();
-    // Cup on table
-    pr(ctx, tx + 3, ty, 3, 3, "#f0f0f0");
-    // Chairs (pixel rectangles)
-    pr(ctx, tx - 4, ty, 4, 4, P.chair);
-    pr(ctx, tx + 11, ty, 4, 4, P.chairAlt);
-  }
-
-  // Rug under tables
-  pr(ctx, ix + 2, iy + ih / 2 - 2, iw - 4, ih / 2 - 2, P.rug);
-  pr(ctx, ix + 3, iy + ih / 2 - 1, iw - 6, ih / 2 - 4, P.rugLight);
-
-  // Menu board on left wall
-  pr(ctx, ix + 1, iy + 14, 8, 14, "#282828");
-  for (let l = 0; l < 4; l++) {
-    pr(ctx, ix + 2, iy + 16 + l * 3, 6, 1, "#e8e8e8");
-  }
-
-  drawBuildingLabel(ctx, loc.name, x + w / 2, y + h);
-}
-
-// ─── Solana HQ: modern office with server racks and monitors ────────
-function drawSolanaHQ(ctx: CanvasRenderingContext2D, loc: LocationData) {
-  const { x, y, width: w, height: h } = loc;
-  drawBuildingShell(ctx, x, y, w, h, P.roofBlue, P.floorTile);
-
-  const ix = x + 8, iy = y + 8, iw = w - 16, ih = h - 16;
-
-  // Room divider (vertical wall)
-  const divX = ix + Math.floor(iw * 0.6);
-  pr(ctx, divX, iy, 4, ih, P.wallOuter);
-  pr(ctx, divX + 1, iy, 2, ih, P.wallInner);
-
-  // Left room: desks with monitors
-  for (let r = 0; r < Math.min(3, Math.floor(ih / 28)); r++) {
-    for (let c = 0; c < 2; c++) {
-      const dx = ix + 4 + c * 28;
-      const dy = iy + 6 + r * 26;
-      pr(ctx, dx, dy, 22, 10, P.desk);
-      pr(ctx, dx + 1, dy + 1, 20, 8, P.deskTop);
-      // Monitor (pixel art)
-      pr(ctx, dx + 6, dy - 3, 10, 6, "#181820");
-      pr(ctx, dx + 7, dy - 2, 8, 4, "#38c888"); // Solana green screen
-      // Monitor stand
-      pr(ctx, dx + 10, dy + 3, 2, 2, "#303030");
-      // Chair
-      pr(ctx, dx + 7, dy + 12, 6, 5, P.chairAlt);
-    }
-  }
-
-  // Right room: server racks
-  const srx = divX + 8;
-  const srw = iw - (divX - ix) - 12;
-  for (let r = 0; r < Math.min(3, Math.floor(ih / 24)); r++) {
-    const sy = iy + 4 + r * 22;
-    pr(ctx, srx, sy, srw, 16, "#383848"); // rack body
-    pr(ctx, srx + 1, sy + 1, srw - 2, 14, "#404858"); // rack front
-    // LED rows
-    for (let led = 0; led < Math.min(4, Math.floor(srw / 7)); led++) {
-      pr(ctx, srx + 3 + led * 6, sy + 3, 3, 2, "#38e888");
-      pr(ctx, srx + 3 + led * 6, sy + 7, 3, 2, "#38c868");
-      pr(ctx, srx + 3 + led * 6, sy + 11, 3, 2, "#38e888");
-    }
-  }
-
-  // Solana logo hint (green diamond)
-  pr(ctx, ix + iw / 4 - 3, iy + ih - 10, 8, 8, "#38c888");
-  pr(ctx, ix + iw / 4 - 1, iy + ih - 8, 4, 4, "#48e8a0");
-
-  drawBuildingLabel(ctx, loc.name, x + w / 2, y + h);
-}
-
-// ─── Helius Labs: tech lab with dashboards and equipment ────────────
-function drawHeliusLabs(ctx: CanvasRenderingContext2D, loc: LocationData) {
-  const { x, y, width: w, height: h } = loc;
-  drawBuildingShell(ctx, x, y, w, h, P.roofTeal, P.floorTile);
-
-  const ix = x + 8, iy = y + 8, iw = w - 16, ih = h - 16;
-
-  // Large dashboard screens along top wall
-  pr(ctx, ix + 2, iy + 2, iw - 4, 16, "#141820"); // screen panel
-  pr(ctx, ix + 3, iy + 3, iw - 6, 14, "#1a2028"); // screen surface
-  // Bar chart visualization
-  for (let i = 0; i < Math.min(6, Math.floor(iw / 14)); i++) {
-    const bh = 4 + (th(i * 100, 0) % 9);
-    pr(ctx, ix + 6 + i * 13, iy + 15 - bh, 8, bh, i % 2 === 0 ? "#38a0d0" : "#58d0a0");
-  }
-
-  // Lab benches with equipment
-  for (let r = 0; r < Math.min(2, Math.floor((ih - 20) / 26)); r++) {
-    const dy = iy + 24 + r * 26;
-    pr(ctx, ix + 4, dy, iw - 8, 10, "#808898"); // metal bench
-    pr(ctx, ix + 5, dy + 1, iw - 10, 8, "#909aa8"); // bench top
-    // Equipment (monitors on bench)
-    for (let m = 0; m < Math.min(3, Math.floor(iw / 28)); m++) {
-      pr(ctx, ix + 8 + m * 26, dy - 4, 10, 6, "#181828");
-      pr(ctx, ix + 9 + m * 26, dy - 3, 8, 4, "#38a078");
-    }
-    // Chairs
-    pr(ctx, ix + 10, dy + 12, 5, 5, P.chairAlt);
-    pr(ctx, ix + iw - 20, dy + 12, 5, 5, P.chairAlt);
-  }
-
-  // Server rack in corner
-  pr(ctx, ix + iw - 14, iy + ih - 20, 12, 18, "#383848");
-  pr(ctx, ix + iw - 12, iy + ih - 18, 2, 2, "#38e888");
-  pr(ctx, ix + iw - 12, iy + ih - 14, 2, 2, "#e83838");
-  pr(ctx, ix + iw - 8, iy + ih - 18, 2, 2, "#38e888");
-
-  // Potted plant
-  pr(ctx, ix + 2, iy + ih - 8, 6, 4, P.plantPot);
-  pr(ctx, ix + 3, iy + ih - 12, 4, 5, P.plant);
-
-  drawBuildingLabel(ctx, loc.name, x + w / 2, y + h);
-}
-
-// ─── Dev Hub: open workspace with laptop stations ───────────────────
-function drawDevHub(ctx: CanvasRenderingContext2D, loc: LocationData) {
-  const { x, y, width: w, height: h } = loc;
-  drawBuildingShell(ctx, x, y, w, h, P.roofGray, P.floorWood);
-
-  const ix = x + 8, iy = y + 8, iw = w - 16, ih = h - 16;
-
-  // Long communal tables
-  for (let r = 0; r < Math.min(3, Math.floor(ih / 28)); r++) {
-    const dy = iy + 6 + r * 28;
-    pr(ctx, ix + 4, dy, iw - 8, 10, P.desk);
-    pr(ctx, ix + 5, dy + 1, iw - 10, 8, P.deskTop);
-    // Laptops on table (pixel art)
-    for (let l = 0; l < Math.min(3, Math.floor(iw / 26)); l++) {
-      const lx = ix + 10 + l * 24;
-      pr(ctx, lx, dy + 1, 10, 6, "#303038"); // laptop base
-      pr(ctx, lx + 1, dy + 2, 8, 4, "#4080cc"); // screen
-      pr(ctx, lx + 3, dy + 3, 4, 2, "#60a0e0"); // screen glare
-    }
-    // Chairs on both sides
-    for (let c = 0; c < Math.min(3, Math.floor(iw / 28)); c++) {
-      pr(ctx, ix + 8 + c * 24, dy - 6, 5, 5, P.chair);
-      pr(ctx, ix + 8 + c * 24, dy + 12, 5, 5, P.chairAlt);
-    }
-  }
-
-  // Whiteboard on left wall
-  pr(ctx, ix + 1, iy + 2, 4, ih - 4, "#e8e8e8");
-  pr(ctx, ix + 1, iy + 3, 3, ih - 6, "#f4f4f4");
-  // Sticky notes (pixel squares)
-  pr(ctx, ix + 1, iy + 6, 3, 3, "#f0e040");
-  pr(ctx, ix + 1, iy + 12, 3, 3, "#40c0f0");
-  pr(ctx, ix + 1, iy + 18, 3, 3, "#f08080");
-  pr(ctx, ix + 1, iy + 24, 3, 3, "#80e080");
-
-  drawBuildingLabel(ctx, loc.name, x + w / 2, y + h);
-}
-
-// ─── Learning Center: classroom with rows and whiteboard ────────────
-function drawLearningCenter(ctx: CanvasRenderingContext2D, loc: LocationData) {
-  const { x, y, width: w, height: h } = loc;
-  drawBuildingShell(ctx, x, y, w, h, P.roofBrown, P.floorWood);
-
-  const ix = x + 8, iy = y + 8, iw = w - 16, ih = h - 16;
-
-  // Big whiteboard at top
-  pr(ctx, ix + 4, iy + 2, iw - 8, 14, "#d8d8d8"); // frame
-  pr(ctx, ix + 5, iy + 3, iw - 10, 12, "#f0f0f0"); // board surface
-  // Writing on whiteboard (pixel art scribbles)
-  for (let l = 0; l < 3; l++) {
-    pr(ctx, ix + 8, iy + 5 + l * 4, 18 + (l * 6), 1, "#3058a0");
-  }
-  // Red circle diagram
-  pr(ctx, ix + iw - 20, iy + 5, 8, 8, "#d03030");
-
-  // Student desks in rows
-  for (let r = 0; r < Math.min(3, Math.floor((ih - 22) / 22)); r++) {
-    for (let c = 0; c < Math.min(3, Math.floor(iw / 28)); c++) {
-      const dx = ix + 6 + c * 28;
-      const dy = iy + 22 + r * 22;
-      pr(ctx, dx, dy, 20, 8, P.desk);
-      pr(ctx, dx + 1, dy + 1, 18, 6, P.deskTop);
-      pr(ctx, dx + 6, dy + 10, 6, 5, P.chairAlt);
-    }
-  }
-
-  // Bookshelf on right wall (with colored books)
-  pr(ctx, ix + iw - 10, iy + 18, 8, ih - 22, P.bookshelf);
-  for (let b = 0; b < Math.min(6, Math.floor((ih - 22) / 7)); b++) {
-    pr(ctx, ix + iw - 9, iy + 20 + b * 7, 6, 5, P.bookColors[b % P.bookColors.length]);
-  }
-
-  // Potted plant near door
-  pr(ctx, ix + iw - 10, iy + ih - 8, 6, 4, P.plantPot);
-  pr(ctx, ix + iw - 9, iy + ih - 12, 4, 5, P.plant);
-
-  drawBuildingLabel(ctx, loc.name, x + w / 2, y + h);
-}
-
-// ─── Press Room: podium with press chairs ───────────────────────────
-function drawPressRoom(ctx: CanvasRenderingContext2D, loc: LocationData) {
-  const { x, y, width: w, height: h } = loc;
-  drawBuildingShell(ctx, x, y, w, h, P.roofBlue, P.floorCarpet);
-
-  const ix = x + 8, iy = y + 8, iw = w - 16, ih = h - 16;
-  const cx2 = ix + iw / 2;
-
-  // Backdrop banner (blue with lighter stripe)
-  pr(ctx, ix + 2, iy + 1, iw - 4, 4, "#2858a0");
-  pr(ctx, ix + 4, iy + 2, iw - 8, 2, "#3870c0");
-
-  // Podium at top
-  pr(ctx, cx2 - 12, iy + 5, 24, 14, P.desk);
-  pr(ctx, cx2 - 10, iy + 6, 20, 12, P.deskTop);
-  // Microphone
-  pr(ctx, cx2 - 1, iy + 3, 2, 5, "#484848");
-  pr(ctx, cx2 - 2, iy + 2, 4, 2, "#585858");
-
-  // Press chairs in rows
-  for (let r = 0; r < Math.min(2, Math.floor((ih - 24) / 14)); r++) {
-    for (let c = 0; c < Math.min(3, Math.floor(iw / 18)); c++) {
-      pr(ctx, ix + 4 + c * 18, iy + 24 + r * 14, 10, 7, P.chair);
-      pr(ctx, ix + 5 + c * 18, iy + 25 + r * 14, 8, 5, "#d05848");
-    }
-  }
-
-  // Camera on tripod
-  pr(ctx, ix + iw - 10, iy + ih - 12, 8, 8, "#383838");
-  pr(ctx, ix + iw - 8, iy + ih - 14, 2, 4, "#484848"); // lens
-  // Tripod legs
-  pr(ctx, ix + iw - 10, iy + ih - 4, 2, 4, "#505050");
-  pr(ctx, ix + iw - 4, iy + ih - 4, 2, 4, "#505050");
-
-  drawBuildingLabel(ctx, loc.name, x + w / 2, y + h);
-}
-
-// ─── Generic building fallback ──────────────────────────────────────
-function drawGenericBuilding(ctx: CanvasRenderingContext2D, loc: LocationData) {
-  const { x, y, width: w, height: h } = loc;
-  drawBuildingShell(ctx, x, y, w, h, P.roofGray, P.floorWood);
-
-  const ix = x + 8, iy = y + 8, iw = w - 16, ih = h - 16;
-  // Generic furniture
-  pr(ctx, ix + 4, iy + 4, iw - 8, 8, P.desk);
-  pr(ctx, ix + 5, iy + 5, iw - 10, 6, P.deskTop);
-  pr(ctx, ix + iw / 2 - 3, iy + 14, 6, 5, P.chair);
-
-  drawBuildingLabel(ctx, loc.name, x + w / 2, y + h);
-}
-
-// ─── Outdoor locations ─────────────────────────────────────────────
-function drawOutdoor(ctx: CanvasRenderingContext2D, loc: LocationData) {
-  const { x, y, width: w, height: h } = loc;
-  const cx = x + w / 2;
-  const cy = y + h / 2;
-
-  if (loc.name === "Town Square") {
-    // Cobblestone plaza — neat brick pattern (JRPG style)
-    for (let ty2 = y; ty2 < y + h; ty2 += 8) {
-      for (let tx2 = x; tx2 < x + w; tx2 += 8) {
-        const v = th(tx2 + 500, ty2 + 500);
-        const offset = (Math.floor((ty2 - y) / 8) % 2) * 4;
-        const c = v < 300 ? "#d0b888" : v < 600 ? "#c0a878" : "#dcc898";
-        pr(ctx, tx2 + offset, ty2, 8, 8, c);
-        // Grout lines
-        pr(ctx, tx2 + offset, ty2, 8, 1, "#a08858");
-        pr(ctx, tx2 + offset, ty2, 1, 8, "#a08858");
-      }
-    }
-
-    // Fountain in center (stone circle with water)
-    // Outer stone ring
-    ctx.fillStyle = "#909898";
-    ctx.beginPath();
-    ctx.arc(cx, cy, 18, 0, Math.PI * 2);
-    ctx.fill();
-    // Inner stone
-    ctx.fillStyle = "#a8a8b0";
-    ctx.beginPath();
-    ctx.arc(cx, cy, 15, 0, Math.PI * 2);
-    ctx.fill();
-    // Water
-    ctx.fillStyle = P.water;
-    ctx.beginPath();
-    ctx.arc(cx, cy, 12, 0, Math.PI * 2);
-    ctx.fill();
-    // Water highlight
-    ctx.fillStyle = P.waterLight;
-    ctx.beginPath();
-    ctx.arc(cx - 3, cy - 3, 6, 0, Math.PI * 2);
-    ctx.fill();
-    // Center pillar
-    pr(ctx, cx - 2, cy - 12, 4, 10, "#808890");
-    pr(ctx, cx - 3, cy - 14, 6, 3, "#909898");
-    // Water splash particles
-    pr(ctx, cx - 5, cy - 8, 2, 2, P.waterLight);
-    pr(ctx, cx + 4, cy - 6, 2, 2, P.waterLight);
-
-    drawBuildingLabel(ctx, "Town Square", cx, y + h);
-
-  } else if (loc.name === "Consensus Park") {
-    // Slightly brighter grass
-    pr(ctx, x, y, w, h, P.grass3);
-    // Small flower patches
-    for (let fy = y + 4; fy < y + h - 4; fy += 10) {
-      for (let fx = x + 4; fx < x + w - 4; fx += 10) {
-        const v = th(fx + 999, fy + 999);
-        if (v < 80) pr(ctx, fx, fy, 3, 3, P.grassFlower1);
-        if (v > 920) pr(ctx, fx, fy, 3, 3, P.grassFlower3);
-        if (v > 800 && v < 830) pr(ctx, fx, fy, 2, 2, "#ffee44"); // yellow flowers
-      }
-    }
-
-    // Park trees
-    drawSmallTree(ctx, x + 16, cy - 8);
-    drawSmallTree(ctx, x + w - 16, cy - 8);
-    drawSmallTree(ctx, cx, y + 14);
-
-    // Bench (wooden, pixel art)
-    pr(ctx, cx - 12, cy + 8, 24, 3, P.trunk);
-    pr(ctx, cx - 12, cy + 5, 2, 3, P.trunkDark); // leg
-    pr(ctx, cx + 10, cy + 5, 2, 3, P.trunkDark); // leg
-    pr(ctx, cx - 12, cy + 11, 2, 3, P.trunkDark); // back leg
-    pr(ctx, cx + 10, cy + 11, 2, 3, P.trunkDark);
-    // Bench back
-    pr(ctx, cx - 12, cy + 4, 24, 2, P.trunk);
-
-    // Stone path through park
-    for (let px = x; px < x + w; px += 8) {
-      const v = th(px + 400, cy);
-      const c = v < 500 ? P.path : P.pathLight;
-      pr(ctx, px, cy - 4, 8, 8, c);
-    }
-
-    drawBuildingLabel(ctx, "Consensus Park", cx, y + h);
+// ─── Building top-down dispatch ─────────────────────────────────────
+function drawBuildingTopDown(ctx: CanvasRenderingContext2D, loc: LocationData) {
+  if (loc.name === "The Colosseum") {
+    drawColosseum(ctx, loc);
+  } else {
+    drawBuilding(ctx, loc);
   }
 }
 
-// ─── Agent Sprite: chibi character (larger, more detailed) ──────────
+// ─── Agent Sprite: bigger chibi with distinct features ──────────────
 function drawAgent(
   ctx: CanvasRenderingContext2D,
   x: number, y: number,
@@ -978,102 +652,130 @@ function drawAgent(
   const colors = AGENT_SPRITES[name] || DEFAULT_SPRITE;
   const walking = agent.status === "walking";
 
-  // Walk bob
   const bob = walking ? (Math.floor(tick / 4) % 2) * -1 : 0;
   const sy = y + bob;
 
-  // Shadow (bigger for chibi)
-  ctx.fillStyle = "rgba(0,0,0,0.22)";
+  // Shadow
+  ctx.fillStyle = "rgba(0,0,0,0.2)";
   ctx.beginPath();
-  ctx.ellipse(x, y + 7, 7, 3, 0, 0, Math.PI * 2);
+  ctx.ellipse(x, y + 6, 5, 2.5, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // Selection indicator — bouncing triangle
+  // Selection indicator — bouncing arrow
   if (isSelected) {
-    const bounce = Math.sin(tick * 0.2) * 2;
-    ctx.fillStyle = "#ffdd00";
-    ctx.beginPath();
-    ctx.moveTo(x, sy - 26 + bounce);
-    ctx.lineTo(x - 4, sy - 31 + bounce);
-    ctx.lineTo(x + 4, sy - 31 + bounce);
-    ctx.fill();
-    // Arrow outline
+    const bounce = Math.sin(tick * 0.2) * 1.5;
+    pr(ctx, x - 2, sy - 22 + bounce, 4, 3, "#ffdd00");
+    pr(ctx, x - 1, sy - 19 + bounce, 2, 2, "#ffdd00");
+    // Outline
     ctx.strokeStyle = "#aa8800";
     ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(x, sy - 26 + bounce);
-    ctx.lineTo(x - 4, sy - 31 + bounce);
-    ctx.lineTo(x + 4, sy - 31 + bounce);
-    ctx.closePath();
-    ctx.stroke();
+    ctx.strokeRect(x - 2.5, sy - 22.5 + bounce, 5, 3);
   }
 
-  // Feet/shoes
+  // ─── Feet/shoes ───
   if (walking) {
     const step = Math.floor(tick / 4) % 2;
-    pr(ctx, x - 3 + (step ? 2 : -1), sy + 3, 3, 3, "#3a2a18");
-    pr(ctx, x + 1 + (step ? -1 : 2), sy + 3, 3, 3, "#3a2a18");
+    pr(ctx, x - 3 + (step ? 2 : 0), sy + 3, 2, 2, "#3a2a18");
+    pr(ctx, x + 1 + (step ? 0 : 2), sy + 3, 2, 2, "#3a2a18");
   } else {
-    pr(ctx, x - 3, sy + 3, 3, 3, "#3a2a18");
-    pr(ctx, x + 1, sy + 3, 3, 3, "#3a2a18");
+    pr(ctx, x - 3, sy + 3, 2, 2, "#3a2a18");
+    pr(ctx, x + 2, sy + 3, 2, 2, "#3a2a18");
   }
 
-  // Legs
-  pr(ctx, x - 2, sy + 1, 2, 4, "#404858");
-  pr(ctx, x + 1, sy + 1, 2, 4, "#404858");
+  // ─── Legs ───
+  pr(ctx, x - 2, sy + 1, 2, 3, "#404858");
+  pr(ctx, x + 1, sy + 1, 2, 3, "#404858");
 
-  // Torso (shirt) — wider for chibi
-  pr(ctx, x - 5, sy - 5, 10, 7, colors.shirt);
+  // ─── Torso (shirt) — wider for chibi ───
+  pr(ctx, x - 4, sy - 4, 8, 6, colors.shirt);
   // Shirt highlight
-  pr(ctx, x - 4, sy - 4, 3, 5, "rgba(255,255,255,0.15)");
+  pr(ctx, x - 3, sy - 3, 2, 4, "rgba(255,255,255,0.12)");
 
-  // Arms
-  pr(ctx, x - 6, sy - 4, 2, 5, colors.shirt);
-  pr(ctx, x + 5, sy - 4, 2, 5, colors.shirt);
-  // Hands (skin)
-  pr(ctx, x - 6, sy + 1, 2, 2, "#f0c8a0");
-  pr(ctx, x + 5, sy + 1, 2, 2, "#f0c8a0");
+  // ─── Arms ───
+  pr(ctx, x - 5, sy - 3, 2, 5, colors.shirt);
+  pr(ctx, x + 4, sy - 3, 2, 5, colors.shirt);
+  // Hands
+  pr(ctx, x - 5, sy + 2, 2, 1, colors.skin);
+  pr(ctx, x + 4, sy + 2, 2, 1, colors.skin);
 
-  // Head (skin — larger for chibi proportions)
-  ctx.fillStyle = "#f0c8a0";
-  ctx.beginPath();
-  ctx.arc(x, sy - 10, 5.5, 0, Math.PI * 2);
-  ctx.fill();
-  // Head outline
-  ctx.strokeStyle = "#c09870";
-  ctx.lineWidth = 0.5;
-  ctx.beginPath();
-  ctx.arc(x, sy - 10, 5.5, 0, Math.PI * 2);
-  ctx.stroke();
+  // ─── Head (big for chibi — 8px wide, 6px tall) ───
+  pr(ctx, x - 4, sy - 10, 8, 6, colors.skin);
 
-  // Eyes (tiny dots — chibi style)
-  pr(ctx, x - 2, sy - 10, 2, 2, "#202020");
-  pr(ctx, x + 1, sy - 10, 2, 2, "#202020");
+  // ─── Eyes ───
+  pr(ctx, x - 2, sy - 8, 1, 1, "#202020");
+  pr(ctx, x + 2, sy - 8, 1, 1, "#202020");
   // Eye shine
-  pr(ctx, x - 2, sy - 11, 1, 1, "#ffffff");
-  pr(ctx, x + 1, sy - 11, 1, 1, "#ffffff");
+  pr(ctx, x - 2, sy - 9, 1, 1, "#ffffff");
+  pr(ctx, x + 2, sy - 9, 1, 1, "#ffffff");
 
-  // Hair (bigger, covers top of head)
-  ctx.fillStyle = colors.hair;
-  ctx.beginPath();
-  ctx.arc(x, sy - 12, 6, Math.PI, Math.PI * 2);
-  ctx.fill();
-  // Side hair tufts
-  pr(ctx, x - 6, sy - 13, 2, 5, colors.hair);
-  pr(ctx, x + 5, sy - 13, 2, 5, colors.hair);
-  // Top hair
-  pr(ctx, x - 4, sy - 16, 8, 3, colors.hair);
+  // ─── Mouth ───
+  pr(ctx, x - 1, sy - 6, 2, 1, "#c09870");
 
-  // Name label below (JRPG style)
-  ctx.fillStyle = "rgba(0,0,0,0.5)";
-  ctx.font = "bold 7px sans-serif";
+  // ─── Hair (depends on character) ───
+  if (colors.bald) {
+    // Mert: bald head — just skin on top, slightly darker scalp edge
+    pr(ctx, x - 4, sy - 11, 8, 2, colors.skin);
+    pr(ctx, x - 3, sy - 12, 6, 1, colors.skin);
+    // Subtle scalp shadow
+    pr(ctx, x - 3, sy - 11, 6, 1, "#c89860");
+  } else if (colors.longHair) {
+    // Lily: long hair — covers top + falls down sides
+    pr(ctx, x - 4, sy - 12, 8, 3, colors.hair);
+    pr(ctx, x - 3, sy - 13, 6, 2, colors.hair);
+    // Side hair falling down past head
+    pr(ctx, x - 5, sy - 11, 2, 8, colors.hair);
+    pr(ctx, x + 4, sy - 11, 2, 8, colors.hair);
+    // Hair tips going further down
+    pr(ctx, x - 5, sy - 3, 1, 3, colors.hair);
+    pr(ctx, x + 5, sy - 3, 1, 3, colors.hair);
+  } else {
+    // Standard short hair
+    pr(ctx, x - 4, sy - 12, 8, 3, colors.hair);
+    pr(ctx, x - 3, sy - 13, 6, 2, colors.hair);
+    // Side tufts
+    pr(ctx, x - 5, sy - 11, 1, 3, colors.hair);
+    pr(ctx, x + 5, sy - 11, 1, 3, colors.hair);
+  }
+
+  // ─── Beard (Mert) ───
+  if (colors.beard) {
+    pr(ctx, x - 3, sy - 7, 6, 3, "#2a2020");
+    pr(ctx, x - 2, sy - 4, 4, 1, "#2a2020");
+    // Chin point
+    pr(ctx, x - 1, sy - 3, 2, 1, "#2a2020");
+  }
+
+  // ─── Glasses (Austin) ───
+  if (colors.glasses) {
+    pr(ctx, x - 3, sy - 9, 3, 2, "#303030");
+    pr(ctx, x + 1, sy - 9, 3, 2, "#303030");
+    // Lenses
+    pr(ctx, x - 2, sy - 8, 1, 1, "#88bbee");
+    pr(ctx, x + 2, sy - 8, 1, 1, "#88bbee");
+    // Bridge
+    pr(ctx, x, sy - 9, 1, 1, "#303030");
+  }
+
+  // ─── 1px outline around full sprite ───
+  ctx.strokeStyle = P.outline;
+  ctx.lineWidth = 1;
+  // Body outline
+  ctx.strokeRect(x - 4.5, sy - 4.5, 9, 10);
+  // Head outline
+  ctx.strokeRect(x - 4.5, sy - (colors.bald ? 12 : 13) + 0.5, 9, (colors.bald ? 9 : 10));
+
+  // ─── Name label (readable) ───
+  ctx.font = "bold 9px monospace";
   ctx.textAlign = "center";
-  ctx.fillText(name, x, y + 14);
+  // Shadow text
+  ctx.fillStyle = "rgba(0,0,0,0.7)";
+  ctx.fillText(name, x + 0.5, y + 12.5);
+  // White text
   ctx.fillStyle = "#ffffff";
-  ctx.fillText(name, x - 0.5, y + 13.5);
+  ctx.fillText(name, x, y + 12);
 }
 
-// ─── Speech Bubble: white rounded with "..." text (JRPG style) ──────
+// ─── Speech Bubble ──────────────────────────────────────────────────
 function drawBubble(
   ctx: CanvasRenderingContext2D,
   x: number, y: number,
@@ -1084,58 +786,32 @@ function drawBubble(
 
   const isThinking = agent.status === "reflecting" || agent.status === "planning";
 
-  // Bubble dimensions — slightly larger for chibi
-  const bw = 32;
-  const bh = 16;
+  const bw = 24;
+  const bh = 14;
   const bx = x - bw / 2;
-  const by = y - 36;
+  const by = y - 30;
 
-  // White rounded bubble (JRPG style)
-  ctx.fillStyle = P.bubbleBg;
-  ctx.beginPath();
-  ctx.roundRect(bx, by, bw, bh, 6);
-  ctx.fill();
-  ctx.strokeStyle = P.bubbleBorder;
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  ctx.roundRect(bx, by, bw, bh, 6);
-  ctx.stroke();
+  pr(ctx, bx, by, bw, bh, P.bubbleBg);
+  outlineRect(ctx, bx, by, bw, bh);
 
   // Pointer triangle
-  ctx.fillStyle = P.bubbleBg;
-  ctx.beginPath();
-  ctx.moveTo(x - 4, by + bh);
-  ctx.lineTo(x, by + bh + 6);
-  ctx.lineTo(x + 4, by + bh);
-  ctx.fill();
-  ctx.strokeStyle = P.bubbleBorder;
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  ctx.moveTo(x - 4, by + bh);
-  ctx.lineTo(x, by + bh + 6);
-  ctx.lineTo(x + 4, by + bh);
-  ctx.stroke();
-  // Cover gap
-  pr(ctx, x - 4, by + bh - 1, 9, 2, P.bubbleBg);
+  pr(ctx, x - 2, by + bh, 4, 2, P.bubbleBg);
+  pr(ctx, x - 1, by + bh + 2, 2, 1, P.bubbleBg);
 
-  // Text: "..." animated dots (clean JRPG style)
+  // Dots or status text
   ctx.fillStyle = P.textDark;
-  ctx.font = "bold 10px sans-serif";
+  ctx.font = "bold 8px monospace";
   ctx.textAlign = "center";
-
   if (isThinking) {
     const phase = Math.floor(tick / 8) % 4;
-    const dots = ".".repeat(phase || 1);
-    ctx.fillText(dots, x, by + 12);
+    ctx.fillText(".".repeat(phase || 1), x, by + 10);
   } else {
-    // Talking — animated dots or speech indicator
     const phase = Math.floor(tick / 6) % 3;
-    const dots = ".".repeat(phase + 1);
-    ctx.fillText(dots, x, by + 12);
+    ctx.fillText(".".repeat(phase + 1), x, by + 10);
   }
 }
 
-// ─── Conversation callout: white box with dialogue ─────────────────
+// ─── Conversation callout ───────────────────────────────────────────
 function drawConvoCallout(
   ctx: CanvasRenderingContext2D,
   convo: ConvoData,
@@ -1147,54 +823,27 @@ function drawConvoCallout(
   const a2 = agents[convo.participants[1]];
   if (!a1 || !a2) return;
 
-  // Show last 2 messages
-  const msgs = convo.messages.slice(-2);
-  const lines: string[] = [];
-  for (const m of msgs) {
-    const speaker = m.agentName.split(" ")[0];
-    const text = m.content.slice(0, 40) + (m.content.length > 40 ? "..." : "");
-    lines.push(`[${speaker}]: ${text}`);
-  }
+  const msg = convo.messages[convo.messages.length - 1];
+  const speaker = msg.agentName.split(" ")[0];
+  const text = msg.content.slice(0, 30) + (msg.content.length > 30 ? ".." : "");
 
-  // Position — below the midpoint
   const mx = (a1.position.x + a2.position.x) / 2;
-  const my = Math.max(a1.position.y, a2.position.y) + 20;
+  const my = Math.max(a1.position.y, a2.position.y) + 18;
 
-  ctx.font = "8px sans-serif";
-  const maxLineW = Math.max(...lines.map(l => ctx.measureText(l).width));
-  const boxW = Math.min(maxLineW + 16, 220);
-  const boxH = lines.length * 13 + 10;
-  const bx = Math.max(4, Math.min(796 - boxW, mx - boxW / 2));
-  const by = Math.max(4, Math.min(596 - boxH, my));
+  ctx.font = "8px monospace";
+  const lineW = ctx.measureText(`${speaker}: ${text}`).width + 10;
+  const boxW = Math.min(lineW, 180);
+  const boxH = 14;
+  const bx = Math.max(2, Math.min(NATIVE_W - boxW - 2, mx - boxW / 2));
+  const by = Math.max(2, Math.min(NATIVE_H - boxH - 2, my));
 
-  // White box with border
-  ctx.fillStyle = P.bubbleBg;
-  ctx.beginPath();
-  ctx.roundRect(bx, by, boxW, boxH, 3);
-  ctx.fill();
-  ctx.strokeStyle = P.bubbleBorder;
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.roundRect(bx, by, boxW, boxH, 3);
-  ctx.stroke();
+  pr(ctx, bx, by, boxW, boxH, P.bubbleBg);
+  outlineRect(ctx, bx, by, boxW, boxH);
 
-  // Lines connector to agents
-  ctx.strokeStyle = "#a0a0a0";
-  ctx.lineWidth = 1;
-  ctx.setLineDash([3, 3]);
-  ctx.beginPath();
-  ctx.moveTo(bx + boxW / 2, by);
-  ctx.lineTo(mx, my - 10);
-  ctx.stroke();
-  ctx.setLineDash([]);
-
-  // Text
   ctx.fillStyle = P.textDark;
-  ctx.font = "8px sans-serif";
+  ctx.font = "8px monospace";
   ctx.textAlign = "left";
-  for (let i = 0; i < lines.length; i++) {
-    ctx.fillText(lines[i], bx + 6, by + 12 + i * 13, boxW - 12);
-  }
+  ctx.fillText(`${speaker}: ${text}`, bx + 4, by + 10, boxW - 8);
 }
 
 // ─── Utility ────────────────────────────────────────────────────────
@@ -1278,7 +927,7 @@ export default function Home() {
     return () => ws?.close();
   }, []);
 
-  // ─── Draw Pipeline (painter's algorithm matching paper) ───────────
+  // ─── Draw Pipeline ─────────────────────────────────────────────────
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas || !world) return;
@@ -1289,16 +938,16 @@ export default function Home() {
 
     ctx.imageSmoothingEnabled = false;
 
-    // 1. Bright green grass background
+    // 1. Grass background
     drawGrass(ctx);
 
-    // 2. Sandy paths connecting locations
+    // 2. Paths
     drawPaths(ctx, world.locations);
 
-    // 3. Decorations (trees, bushes)
+    // 3. Decorations
     drawDecorations(ctx);
 
-    // 4. Buildings (top-down with interiors) & outdoor locations
+    // 4. Buildings & outdoor locations
     for (const loc of world.locations) {
       if (loc.type === "outdoor") {
         drawOutdoor(ctx, loc);
@@ -1313,10 +962,10 @@ export default function Home() {
         const a1 = world.agents[convo.participants[0]];
         const a2 = world.agents[convo.participants[1]];
         if (a1 && a2) {
-          ctx.strokeStyle = "rgba(180,180,200,0.5)";
+          ctx.strokeStyle = "rgba(180,180,200,0.4)";
           ctx.lineWidth = 1;
-          ctx.setLineDash([4, 4]);
-          ctx.lineDashOffset = -(tick % 16);
+          ctx.setLineDash([2, 2]);
+          ctx.lineDashOffset = -(tick % 8);
           ctx.beginPath();
           ctx.moveTo(a1.position.x, a1.position.y);
           ctx.lineTo(a2.position.x, a2.position.y);
@@ -1331,12 +980,12 @@ export default function Home() {
       drawAgent(ctx, agent.position.x, agent.position.y, agent, tick, id === selectedAgent);
     }
 
-    // 7. Speech bubbles (on top of agents)
+    // 7. Speech bubbles
     for (const [, agent] of Object.entries(world.agents)) {
       drawBubble(ctx, agent.position.x, agent.position.y, agent, tick);
     }
 
-    // 8. Conversation callout text boxes
+    // 8. Conversation callouts
     for (const convo of conversations) {
       drawConvoCallout(ctx, convo, world.agents);
     }
@@ -1344,39 +993,29 @@ export default function Home() {
     // 9. Selected agent action tooltip
     if (selectedAgent && world.agents[selectedAgent]?.currentAction) {
       const agent = world.agents[selectedAgent];
-      const text = agent.currentAction!.slice(0, 50) + (agent.currentAction!.length > 50 ? "..." : "");
-      ctx.font = "9px sans-serif";
-      const tw = ctx.measureText(text).width + 14;
-      const tx = Math.max(tw / 2 + 2, Math.min(798 - tw / 2, agent.position.x));
-      const ty = agent.position.y + 12;
+      const text = agent.currentAction!.slice(0, 35) + (agent.currentAction!.length > 35 ? ".." : "");
+      ctx.font = "8px monospace";
+      const tw = ctx.measureText(text).width + 10;
+      const tx = Math.max(tw / 2 + 2, Math.min(NATIVE_W - tw / 2 - 2, agent.position.x));
+      const ty = agent.position.y + 16;
 
-      ctx.fillStyle = P.bubbleBg;
-      ctx.beginPath();
-      ctx.roundRect(tx - tw / 2, ty, tw, 16, 3);
-      ctx.fill();
-      ctx.strokeStyle = P.bubbleBorder;
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.roundRect(tx - tw / 2, ty, tw, 16, 3);
-      ctx.stroke();
+      pr(ctx, tx - tw / 2, ty, tw, 13, P.bubbleBg);
+      outlineRect(ctx, tx - tw / 2, ty, tw, 13);
       ctx.fillStyle = P.textDark;
-      ctx.font = "9px sans-serif";
+      ctx.font = "8px monospace";
       ctx.textAlign = "center";
-      ctx.fillText(text, tx, ty + 12);
+      ctx.fillText(text, tx, ty + 9);
     }
 
     // 10. Paused overlay
     if (paused) {
       ctx.fillStyle = "rgba(0,0,0,0.4)";
-      ctx.fillRect(0, 0, 800, 600);
-      ctx.fillStyle = "rgba(0,0,0,0.6)";
-      ctx.beginPath();
-      ctx.roundRect(330, 272, 140, 36, 6);
-      ctx.fill();
+      ctx.fillRect(0, 0, NATIVE_W, NATIVE_H);
+      pr(ctx, NATIVE_W / 2 - 35, NATIVE_H / 2 - 10, 70, 22, "rgba(0,0,0,0.7)");
       ctx.fillStyle = "#fff";
-      ctx.font = "bold 18px sans-serif";
+      ctx.font = "bold 12px monospace";
       ctx.textAlign = "center";
-      ctx.fillText("PAUSED", 400, 297);
+      ctx.fillText("PAUSED", NATIVE_W / 2, NATIVE_H / 2 + 5);
     }
   }, [world, selectedAgent, conversations, paused]);
 
@@ -1389,15 +1028,15 @@ export default function Home() {
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!world) return;
     const rect = canvasRef.current!.getBoundingClientRect();
-    const scaleX = 800 / rect.width;
-    const scaleY = 600 / rect.height;
+    const scaleX = NATIVE_W / rect.width;
+    const scaleY = NATIVE_H / rect.height;
     const x = (e.clientX - rect.left) * scaleX;
     const y = (e.clientY - rect.top) * scaleY;
 
     for (const [id, agent] of Object.entries(world.agents)) {
       const dx = x - agent.position.x;
       const dy = y - agent.position.y;
-      if (Math.sqrt(dx * dx + dy * dy) < 15) {
+      if (Math.sqrt(dx * dx + dy * dy) < 12) {
         setSelectedAgent(id);
         return;
       }
@@ -1423,35 +1062,36 @@ export default function Home() {
   const selectedAgentData = selectedAgent && world ? world.agents[selectedAgent] : null;
 
   return (
-    <div style={{ display: "flex", height: "100vh", background: "#1a3818" }}>
+    <div style={{ display: "flex", height: "100vh", background: "#2a3818" }}>
       {/* Main area */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
-        {/* Header */}
+        {/* Header — warm parchment bar */}
         <div style={{
-          padding: "8px 16px",
-          background: "#f5f0e8",
-          borderBottom: "2px solid #c8b898",
+          padding: "6px 16px",
+          background: "#f5edd8",
+          borderBottom: "2px solid #c8b080",
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
+          fontFamily: "monospace",
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <h1 style={{ margin: 0, fontSize: 16, color: "#3a3020", fontFamily: "sans-serif", fontWeight: 700 }}>
+            <h1 style={{ margin: 0, fontSize: 14, color: "#3a2818", fontFamily: "monospace", fontWeight: 700 }}>
               Solana Smallville
             </h1>
             {world && (
-              <span style={{ fontSize: 12, color: "#807060" }}>
-                Day {world.currentDay} &middot; {formatTime(world.currentTime)} &middot; {Object.keys(world.agents).length} agents
+              <span style={{ fontSize: 11, color: "#806848", fontFamily: "monospace" }}>
+                Day {world.currentDay} | {formatTime(world.currentTime)} | {Object.keys(world.agents).length} agents
               </span>
             )}
             {solPrice && (
               <span style={{
-                fontSize: 12,
+                fontSize: 11,
                 fontWeight: 700,
-                color: solPrice.change !== null && solPrice.change >= 0 ? "#16a34a" : "#dc2626",
-                fontFamily: "sans-serif",
+                color: solPrice.change !== null && solPrice.change >= 0 ? "#2a8838" : "#c83030",
+                fontFamily: "monospace",
               }}>
-                SOL: ${solPrice.price.toFixed(2)}
+                SOL ${solPrice.price.toFixed(2)}
                 {solPrice.change !== null && (
                   <span style={{ fontSize: 10, marginLeft: 3 }}>
                     {solPrice.change >= 0 ? "+" : ""}{solPrice.change.toFixed(2)}%
@@ -1460,30 +1100,31 @@ export default function Home() {
               </span>
             )}
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
             <button
               onClick={togglePause}
               style={{
-                padding: "4px 10px", fontSize: 11,
-                border: "1px solid #c8b898", borderRadius: 3,
-                background: paused ? "#d04040" : "#fff",
-                color: paused ? "#fff" : "#3a3020",
-                cursor: "pointer", fontWeight: 600,
+                padding: "3px 8px", fontSize: 10,
+                border: "1px solid #a08858", borderRadius: 0,
+                background: paused ? "#c84040" : "#f5edd8",
+                color: paused ? "#fff" : "#3a2818",
+                cursor: "pointer", fontWeight: 600, fontFamily: "monospace",
               }}
             >
-              {paused ? "▶ Resume" : "⏸ Pause"}
+              {paused ? "RESUME" : "PAUSE"}
             </button>
-            <span style={{ fontSize: 10, color: "#a09080" }}>Speed:</span>
+            <span style={{ fontSize: 10, color: "#a08858", fontFamily: "monospace" }}>SPD:</span>
             {[1, 2, 5, 10].map((s) => (
               <button
                 key={s}
                 onClick={() => changeSpeed(s)}
                 style={{
-                  padding: "2px 7px", fontSize: 10,
-                  border: "1px solid #c8b898", borderRadius: 3,
-                  background: speed === s ? "#5a8c3c" : "#fff",
-                  color: speed === s ? "#fff" : "#807060",
+                  padding: "2px 5px", fontSize: 10,
+                  border: "1px solid #a08858", borderRadius: 0,
+                  background: speed === s ? "#5a8c3c" : "#f5edd8",
+                  color: speed === s ? "#fff" : "#806848",
                   cursor: "pointer", fontWeight: speed === s ? 700 : 400,
+                  fontFamily: "monospace",
                 }}
               >
                 {s}x
@@ -1492,16 +1133,17 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Canvas */}
+        {/* Canvas — 320x240 native, displayed at 960x720 */}
         <div style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center", padding: 8 }}>
           <canvas
             ref={canvasRef}
-            width={800}
-            height={600}
+            width={NATIVE_W}
+            height={NATIVE_H}
             onClick={handleCanvasClick}
             style={{
-              border: "2px solid #c8b898",
-              borderRadius: 4,
+              width: DISPLAY_W,
+              height: DISPLAY_H,
+              border: "2px solid #a08858",
               cursor: "pointer",
               maxWidth: "100%",
               maxHeight: "100%",
@@ -1512,32 +1154,41 @@ export default function Home() {
 
         {/* Legend */}
         <div style={{
-          padding: "5px 16px",
-          borderTop: "1px solid #c8b898",
-          background: "#f5f0e8",
+          padding: "4px 16px",
+          borderTop: "1px solid #c8b080",
+          background: "#f5edd8",
           display: "flex",
-          gap: 14,
+          gap: 12,
           fontSize: 10,
+          fontFamily: "monospace",
         }}>
           {Object.entries(STATUS_COLORS).map(([status, color]) => (
-            <div key={status} style={{ display: "flex", alignItems: "center", gap: 3, color: "#807060" }}>
-              <div style={{ width: 7, height: 7, borderRadius: "50%", backgroundColor: color }} />
+            <div key={status} style={{ display: "flex", alignItems: "center", gap: 3, color: "#806848" }}>
+              <div style={{ width: 6, height: 6, backgroundColor: color }} />
               {status}
             </div>
           ))}
-          <div style={{ marginLeft: "auto", color: "#a09080", fontSize: 9 }}>
+          <div style={{ marginLeft: "auto", color: "#a08858", fontSize: 9 }}>
             Click agent to inspect
           </div>
         </div>
       </div>
 
-      {/* Right panel */}
-      <div style={{ width: 380, borderLeft: "2px solid #c8b898", display: "flex", flexDirection: "column", overflow: "hidden", background: "#1a1a1a" }}>
+      {/* Right panel — warm theme */}
+      <div style={{
+        width: 360,
+        borderLeft: "2px solid #c8b080",
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+        background: "#f5edd8",
+        fontFamily: "monospace",
+      }}>
         <MetricsPanel apiUrl={API_URL} />
         {selectedAgentData ? (
           <AgentPanel agent={selectedAgentData} apiUrl={API_URL} />
         ) : (
-          <div style={{ padding: 16, color: "#606060", fontSize: 13 }}>
+          <div style={{ padding: 16, color: "#a08858", fontSize: 12, fontFamily: "monospace" }}>
             Select an agent to view details
           </div>
         )}

@@ -32,40 +32,40 @@ export default function MetricsPanel({ apiUrl }: { apiUrl: string }) {
   if (!metrics) return null;
 
   return (
-    <div style={{ borderBottom: "1px solid #2a2a2a" }}>
+    <div style={{ borderBottom: "1px solid #c8b080" }}>
       <button
         onClick={() => setCollapsed(!collapsed)}
         style={{
           width: "100%",
-          padding: "8px 12px",
-          background: "#111",
+          padding: "6px 10px",
+          background: "#ede4d0",
           border: "none",
-          borderBottom: collapsed ? "none" : "1px solid #2a2a2a",
-          color: "#94a3b8",
+          borderBottom: collapsed ? "none" : "1px solid #c8b080",
+          color: "#5a4830",
           fontSize: 11,
           fontWeight: 600,
           cursor: "pointer",
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          fontFamily: "sans-serif",
+          fontFamily: "monospace",
         }}
       >
         <span>Simulation Metrics</span>
-        <span style={{ fontSize: 9 }}>{collapsed ? "▶" : "▼"}</span>
+        <span style={{ fontSize: 9 }}>{collapsed ? "+" : "-"}</span>
       </button>
       {!collapsed && (
         <div
           style={{
             display: "grid",
             gridTemplateColumns: "1fr 1fr",
-            gap: 6,
-            padding: "8px 10px",
-            background: "#111",
+            gap: 4,
+            padding: "6px 8px",
+            background: "#f5edd8",
           }}
         >
           <StatCard label="Conversations" value={metrics.totalConversations} sub={`${metrics.activeConversations} active`} />
-          <StatCard label="On-Chain Txs" value={metrics.onChainTxs} color="#40c890" />
+          <StatCard label="On-Chain Txs" value={metrics.onChainTxs} color="#2a8838" />
           <StatCard label="Total Memories" value={metrics.totalMemories} />
           <StatCard label="Avg Memories" value={metrics.avgMemoriesPerAgent.toFixed(1)} />
           <StatusCard statuses={metrics.agentStatuses} />
@@ -92,43 +92,43 @@ function StatCard({
   return (
     <div
       style={{
-        background: "#1e293b",
-        borderRadius: 4,
-        padding: "6px 8px",
+        background: "#ede4d0",
+        border: "1px solid #c8b080",
+        padding: "4px 6px",
       }}
     >
-      <div style={{ fontSize: 9, color: "#64748b", fontFamily: "sans-serif" }}>{label}</div>
-      <div style={{ fontSize: 16, fontWeight: 700, color: color || "#e2e8f0", fontFamily: "sans-serif" }}>
+      <div style={{ fontSize: 9, color: "#8a7858", fontFamily: "monospace" }}>{label}</div>
+      <div style={{ fontSize: 14, fontWeight: 700, color: color || "#3a2818", fontFamily: "monospace" }}>
         {value}
       </div>
-      {sub && <div style={{ fontSize: 9, color: "#64748b", fontFamily: "sans-serif" }}>{sub}</div>}
+      {sub && <div style={{ fontSize: 9, color: "#8a7858", fontFamily: "monospace" }}>{sub}</div>}
     </div>
   );
 }
 
 function StatusCard({ statuses }: { statuses: Record<string, number> }) {
   const statusColors: Record<string, string> = {
-    idle: "#4ade80",
-    walking: "#60a5fa",
-    talking: "#f472b6",
-    reflecting: "#c084fc",
-    planning: "#fbbf24",
+    idle: "#2a8838",
+    walking: "#3868b8",
+    talking: "#c84878",
+    reflecting: "#8848a8",
+    planning: "#b89828",
   };
 
   return (
     <div
       style={{
-        background: "#1e293b",
-        borderRadius: 4,
-        padding: "6px 8px",
+        background: "#ede4d0",
+        border: "1px solid #c8b080",
+        padding: "4px 6px",
       }}
     >
-      <div style={{ fontSize: 9, color: "#64748b", fontFamily: "sans-serif", marginBottom: 3 }}>
+      <div style={{ fontSize: 9, color: "#8a7858", fontFamily: "monospace", marginBottom: 2 }}>
         Agent Status
       </div>
-      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
         {Object.entries(statuses).map(([status, count]) => (
-          <span key={status} style={{ fontSize: 10, color: statusColors[status] || "#94a3b8", fontFamily: "sans-serif" }}>
+          <span key={status} style={{ fontSize: 10, color: statusColors[status] || "#5a4830", fontFamily: "monospace" }}>
             {count} {status}
           </span>
         ))}
@@ -142,17 +142,17 @@ function SolPriceCard({ price, change }: { price: number; change: number | null 
   return (
     <div
       style={{
-        background: "#1e293b",
-        borderRadius: 4,
-        padding: "6px 8px",
+        background: "#ede4d0",
+        border: "1px solid #c8b080",
+        padding: "4px 6px",
       }}
     >
-      <div style={{ fontSize: 9, color: "#64748b", fontFamily: "sans-serif" }}>SOL Price</div>
-      <div style={{ fontSize: 16, fontWeight: 700, color: isUp ? "#4ade80" : "#f87171", fontFamily: "sans-serif" }}>
+      <div style={{ fontSize: 9, color: "#8a7858", fontFamily: "monospace" }}>SOL Price</div>
+      <div style={{ fontSize: 14, fontWeight: 700, color: isUp ? "#2a8838" : "#c83030", fontFamily: "monospace" }}>
         ${price.toFixed(2)}
       </div>
       {change !== null && (
-        <div style={{ fontSize: 9, color: isUp ? "#4ade80" : "#f87171", fontFamily: "sans-serif" }}>
+        <div style={{ fontSize: 9, color: isUp ? "#2a8838" : "#c83030", fontFamily: "monospace" }}>
           {isUp ? "+" : ""}{change.toFixed(2)}%
         </div>
       )}

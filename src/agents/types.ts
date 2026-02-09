@@ -73,7 +73,7 @@ export interface Location {
 }
 
 export interface SimulationEvent {
-  type: "agent_move" | "conversation_start" | "conversation_end" | "conversation_message" | "reflection" | "plan_update" | "observation";
+  type: "agent_move" | "conversation_start" | "conversation_end" | "conversation_message" | "reflection" | "plan_update" | "observation" | "price_update" | "town_event";
   data: unknown;
   timestamp: number;
 }

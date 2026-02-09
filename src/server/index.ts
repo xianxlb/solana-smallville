@@ -5,6 +5,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import http from "http";
 import { Simulation } from "@/world/simulation";
 import { initSolanaLogger, isLoggerEnabled, getEventLog } from "@/solana/logger";
+import { PriceTracker } from "@/solana/pyth-price";
 
 // Initialize Solana logger via AgentWallet API
 initSolanaLogger();
@@ -26,7 +27,8 @@ app.use((_req, res, next) => {
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server, path: "/ws" });
 
-const simulation = new Simulation();
+const priceTracker = new PriceTracker();
+const simulation = new Simulation(priceTracker);
 
 // Broadcast simulation events to all connected WebSocket clients
 simulation.onEvent((event) => {
@@ -136,6 +138,29 @@ app.get("/api/solana/status", (_req, res) => {
 
 app.get("/api/solana/events", (_req, res) => {
   res.json(getEventLog().slice(-50));
+});
+
+app.get("/api/metrics", (_req, res) => {
+  const agents = Array.from(simulation.world.agents.values());
+  const totalMemories = agents.reduce((s, a) => s + a.memoryStream.length, 0);
+  const agentStatuses: Record<string, number> = {};
+  for (const a of agents) {
+    agentStatuses[a.status] = (agentStatuses[a.status] || 0) + 1;
+  }
+  res.json({
+    totalConversations: simulation.world.conversations.length,
+    activeConversations: simulation.world.conversations.filter((c) => !c.endTime).length,
+    onChainTxs: getEventLog().filter((e) => e.txHash).length,
+    totalMemories,
+    avgMemoriesPerAgent: agents.length > 0 ? totalMemories / agents.length : 0,
+    agentStatuses,
+    solPrice: priceTracker.currentPrice,
+    solChange: priceTracker.priceChange,
+  });
+});
+
+app.get("/api/solana/price", (_req, res) => {
+  res.json(priceTracker.getSnapshot());
 });
 
 // WebSocket connection

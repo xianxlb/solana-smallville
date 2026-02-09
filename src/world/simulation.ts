@@ -10,6 +10,7 @@ import { shouldReflect, createMemory } from "@/agents/memory-stream";
 import { generateReflections } from "@/agents/reflection";
 import { logConversation, logReflection, logPlanCreated } from "@/solana/logger";
 import { getWalletAddress } from "@/solana/wallets";
+import { PriceTracker, PriceEvent } from "@/solana/pyth-price";
 
 export type EventListener = (event: SimulationEvent) => void;
 
@@ -23,8 +24,12 @@ export class Simulation {
   private lastReflectionTime: Map<string, number> = new Map();
   private tickInterval: ReturnType<typeof setInterval> | null = null;
   private simulationSpeed = 1; // minutes per tick
+  private priceTracker: PriceTracker;
+  private priceTickCounter = 0;
+  private lastPriceEventTime = -Infinity;
 
-  constructor() {
+  constructor(priceTracker?: PriceTracker) {
+    this.priceTracker = priceTracker || new PriceTracker();
     this.world = {
       agents: new Map(),
       conversations: [],
@@ -86,6 +91,14 @@ export class Simulation {
     }
 
     const minuteOfDay = this.world.currentTime % 1440;
+
+    // Price polling every 10 ticks (~20s real-time)
+    this.priceTickCounter++;
+    if (this.priceTickCounter % 10 === 0) {
+      this.pollPrice().catch((err) => {
+        console.warn("Price poll error:", err instanceof Error ? err.message : err);
+      });
+    }
 
     const agentPromises = Array.from(this.world.agents.entries()).map(
       async ([id, agent]) => {
@@ -235,6 +248,67 @@ export class Simulation {
       data: { conversationId: convo.id, agentId: agent.id, agentName: agent.name, content: reply },
       timestamp: this.world.currentTime,
     });
+  }
+
+  private async pollPrice() {
+    const price = await this.priceTracker.fetchPrice();
+    if (price === null) return;
+
+    // Emit price update for WebSocket clients
+    this.emit({
+      type: "price_update",
+      data: this.priceTracker.getSnapshot(),
+      timestamp: this.world.currentTime,
+    });
+
+    // Cooldown: max one price event per 30 sim-minutes
+    if (this.world.currentTime - this.lastPriceEventTime < 30) return;
+
+    const event = this.priceTracker.detectEvent();
+    if (!event) return;
+
+    this.lastPriceEventTime = this.world.currentTime;
+    const isExtreme = event.startsWith("extreme");
+    const direction = event.includes("pump") ? "pumped" : "dumped";
+    const changePct = this.priceTracker.priceChange;
+    const sign = direction === "pumped" ? "+" : "";
+    const description = `SOL just ${direction} ${sign}${changePct?.toFixed(1)}% to $${price.toFixed(2)}!`;
+    const importance = isExtreme ? 8 : 6;
+
+    console.log(`[${this.world.currentTime}] PRICE EVENT: ${description}`);
+
+    // Inject observation memory into all agents
+    for (const agent of this.world.agents.values()) {
+      agent.memoryStream.push(
+        createMemory(agent.id, description, "observation", this.world.currentTime, importance),
+      );
+    }
+
+    // Extreme events: move 4+ agents to Town Square
+    if (isExtreme) {
+      const townSquare = getLocationByName("Town Square");
+      if (townSquare) {
+        const townCenter = getLocationCenter(townSquare);
+        let moved = 0;
+        for (const agent of this.world.agents.values()) {
+          if (moved >= 4) break;
+          if (!agent.currentConversation) {
+            agent.currentLocation = townSquare.name;
+            agent.position = {
+              x: townCenter.x + (Math.random() - 0.5) * 40,
+              y: townCenter.y + (Math.random() - 0.5) * 30,
+            };
+            agent.status = "walking";
+            moved++;
+          }
+        }
+        this.emit({
+          type: "town_event",
+          data: { event, description, movedAgents: moved },
+          timestamp: this.world.currentTime,
+        });
+      }
+    }
   }
 
   private intervalMs = 2000;
